@@ -1,0 +1,2192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Slide Overlay Fusen + Gemini Charts</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+<style>
+:root {
+  --frame-left: 260px;
+  --frame-right: 320px;
+  --frame-top: 18px;
+  --frame-bottom: 104px;
+  --accent: #00a6ff;
+  --wood: #8b5a2b;
+  --chalk: #07130b;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  background: #000;
+  color: #fff;
+}
+
+body { user-select: none; }
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+
+/* ===== スライド中央 ===== */
+#stage {
+  position: absolute;
+  left: var(--frame-left);
+  right: var(--frame-right);
+  top: var(--frame-top);
+  bottom: var(--frame-bottom);
+  display: grid;
+  place-items: center;
+  background: #000;
+  border: 2px solid rgba(255,255,255,.14);
+  overflow: hidden;
+}
+
+#slideImage {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: none;
+  transform-origin: center center;
+  transform: scale(var(--slide-zoom, 1));
+  transition: transform 0.08s linear;
+}
+
+#startGuide {
+  text-align: center;
+  width: min(760px, calc(100vw - 80px));
+  color: #eaf7ff;
+}
+
+#startGuide h1 {
+  font-size: clamp(28px, 4vw, 50px);
+  margin: 0 0 16px;
+}
+
+#startGuide p {
+  line-height: 1.8;
+  font-size: 17px;
+  opacity: .9;
+}
+
+/* ===== 窓枠 ===== */
+.frame {
+  position: absolute;
+  z-index: 10;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255,255,255,.08), transparent 38%),
+    linear-gradient(135deg, #253c30 0%, var(--chalk) 70%, #020305 100%);
+  box-shadow: inset 0 0 0 5px var(--wood), inset 0 0 0 9px #d1a66b;
+  border: 1px solid rgba(255,255,255,.2);
+}
+
+#topFrame {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--frame-top);
+  background: #111;
+  box-shadow: none;
+}
+
+#leftFrame {
+  left: 0;
+  top: var(--frame-top);
+  bottom: var(--frame-bottom);
+  width: var(--frame-left);
+  padding: 16px;
+  overflow: auto;
+}
+
+#rightFrame {
+  right: 0;
+  top: var(--frame-top);
+  bottom: var(--frame-bottom);
+  width: var(--frame-right);
+  padding: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#bottomFrame {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--frame-bottom);
+  background: rgba(14, 18, 26, .94);
+  box-shadow: inset 0 4px 0 rgba(255,255,255,.12);
+  padding: 8px 12px;
+}
+
+/* ===== 左：投稿フォーム ===== */
+.leftTitle {
+  margin: 4px 0 10px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: .82;
+  margin: 0 0 10px;
+}
+
+input, textarea, button {
+  font-family: inherit;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.field label {
+  font-size: 12px;
+  color: #f7f5d6;
+  font-weight: 800;
+}
+
+input[type="text"], input[type="password"], textarea {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.32);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,.92);
+  color: #111;
+  font-size: 15px;
+  user-select: text;
+}
+
+textarea {
+  height: 118px;
+  resize: vertical;
+}
+
+button {
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 14px;
+  padding: 10px 14px;
+  color: white;
+  background: rgba(255,255,255,.12);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+button:hover { background: rgba(255,255,255,.22); }
+
+button.primary {
+  background: var(--accent);
+  border: none;
+}
+
+button.ghost {
+  background: rgba(255,255,255,.08);
+}
+
+#sendBtn {
+  width: 100%;
+  font-size: 18px;
+  padding: 12px;
+}
+
+#formStatus {
+  margin-top: 8px;
+  font-size: 13px;
+  min-height: 1.4em;
+  color: #fff7b1;
+}
+
+#qrBox {
+  margin-top: 14px;
+}
+
+#showQrBtn {
+  width: 100%;
+  background: #fef9c3;
+  color: #111;
+}
+
+#qrCanvas,
+#qrUrl {
+  display: none;
+}
+
+/* QRモーダル */
+#qrModal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,.7);
+  display: none;
+  place-items: center;
+}
+
+#qrModal.active { display: grid; }
+
+.qrModalCard {
+  width: min(560px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 32px));
+  resize: both;
+  overflow: auto;
+  background: #fff;
+  color: #111;
+  border-radius: 24px;
+  padding: 22px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0,0,0,.45);
+}
+
+#qrModalCanvas {
+  width: min(86%, 480px);
+  height: auto;
+  background: white;
+  border-radius: 12px;
+  padding: 8px;
+  display: block;
+  margin: 0 auto;
+}
+
+/* ===== 右：タブ＋付箋＋グラフ ===== */
+.rightHeader {
+  margin: -14px -14px 10px;
+  padding: 12px 14px 10px;
+  background: rgba(7,19,11,.92);
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  backdrop-filter: blur(8px);
+}
+
+.rightHeader h2 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+#noteCount {
+  font-size: 12px;
+  opacity: .82;
+  margin-bottom: 8px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.tabBtn {
+  padding: 8px 4px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.10);
+}
+
+.tabBtn.active {
+  background: #fef9c3;
+  color: #111;
+}
+
+.tabContent {
+  flex: 1;
+  overflow: auto;
+  display: none;
+  padding-bottom: 14px;
+}
+
+.tabContent.active {
+  display: block;
+}
+
+#stickyBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note {
+  position: relative;
+  color: #111;
+  background: #fef9c3;
+  border-radius: 10px;
+  padding: 11px 11px 42px;
+  box-shadow: 0 8px 14px rgba(0,0,0,.34);
+  transform: rotate(-1.2deg);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  animation: noteIn .35s ease-out both;
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  will-change: transform;
+}
+
+.note:hover {
+  z-index: 20;
+  transform: translateY(-8px) scale(1.045) rotate(0deg) !important;
+  box-shadow: 0 18px 30px rgba(0,0,0,.48);
+  filter: brightness(1.04);
+}
+
+.note:nth-child(2n) {
+  background: #bfdbfe;
+  transform: rotate(1.2deg);
+}
+
+.note:nth-child(3n) {
+  background: #bbf7d0;
+  transform: rotate(-.6deg);
+}
+
+.note-author {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  margin-bottom: 4px;
+  color: #1e293b;
+}
+
+.note-tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15,23,42,.12);
+  white-space: nowrap;
+}
+
+.note-text {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.note-time {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  font-size: 10px;
+  opacity: .58;
+}
+
+.note-actions {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-action-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+  cursor: pointer;
+  color: #111;
+  background: rgba(255,255,255,.70);
+  box-shadow: 0 2px 5px rgba(0,0,0,.16);
+}
+
+.note-action-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.95);
+}
+
+.like-btn {
+  color: #be123c;
+}
+
+.delete-note-btn {
+  margin-left: auto;
+  color: #334155;
+}
+
+.like-meter {
+  flex: 1;
+  height: 8px;
+  min-width: 32px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15,23,42,.16);
+}
+
+.like-meter-fill {
+  height: 100%;
+  width: var(--like-width, 0%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fb7185, #ef4444);
+}
+
+.like-count {
+  min-width: 22px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 900;
+  color: #991b1b;
+}
+
+@keyframes noteIn {
+  from { opacity: 0; transform: translateX(24px) scale(.92); }
+  to { opacity: 1; }
+}
+
+.chartBox {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  padding: 10px;
+}
+
+.chartBox canvas {
+  width: 100%;
+  height: auto;
+  background: rgba(255,255,255,.92);
+  border-radius: 12px;
+}
+
+.chartHint {
+  font-size: 12px;
+  color: #f7f5d6;
+  line-height: 1.6;
+  opacity: .85;
+}
+
+/* ===== グラフ表示用リサイズ可能モーダル ===== */
+#chartModal {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: rgba(0,0,0,.68);
+  display: none;
+  place-items: center;
+}
+
+#chartModal.active {
+  display: grid;
+}
+
+.chartModalCard {
+  width: min(720px, calc(100vw - 36px));
+  height: min(680px, calc(100vh - 36px));
+  resize: both;
+  overflow: auto;
+  background: #ffffff;
+  color: #111;
+  border-radius: 22px;
+  padding: 18px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0,0,0,.45);
+}
+
+.chartModalCard h2 {
+  margin: 0 0 10px;
+}
+
+.chartModalCard canvas {
+  width: 100%;
+  max-width: 660px;
+  height: auto;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.chartOpenButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* ===== 表示モード ===== */
+body.slideOnly #leftFrame,
+body.slideOnly #rightFrame {
+  display: none;
+}
+
+body.slideOnly #stage,
+body.slideOnly #danmakuLayer,
+body.slideOnly #drawCanvas {
+  left: 0;
+  right: 0;
+}
+
+body.stickyOnly #leftFrame,
+body.stickyOnly #stage,
+body.stickyOnly #danmakuLayer,
+body.stickyOnly #drawCanvas,
+body.stickyOnly #startGuide {
+  display: none;
+}
+
+body.stickyOnly #rightFrame {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+body.stickyOnly #boardTab {
+  overflow: auto;
+  padding: 8px 14px 18px;
+}
+
+body.stickyOnly #stickyBoard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+body.stickyOnly .note {
+  width: 100%;
+  min-height: 155px;
+  font-size: 16px;
+}
+
+body.stickyOnly .note-text {
+  font-size: 16px;
+  line-height: 1.48;
+}
+
+body.stickyOnly .note-author {
+  font-size: 14px;
+}
+
+body.stickyOnly .note-time {
+  font-size: 11px;
+}
+
+body.controlsOnly #leftFrame,
+body.controlsOnly #rightFrame,
+body.controlsOnly #stage,
+body.controlsOnly #danmakuLayer,
+body.controlsOnly #drawCanvas,
+body.controlsOnly #topFrame {
+  display: none;
+}
+
+body.controlsOnly #bottomFrame {
+  top: 0;
+  height: 100vh;
+}
+
+body.controlsOnly #bottomControls {
+  transform: scale(1.45);
+}
+
+.toggleBtn.active {
+  background: #fef9c3 !important;
+  color: #111 !important;
+}
+
+/* ===== 下：操作・時間 ===== */
+#bottomControls {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+#bottomControls button {
+  font-size: 12px;
+  padding: 7px 9px;
+  border-radius: 999px;
+}
+
+#bottomLeft,
+#bottomCenter,
+#bottomRight {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.bigBtn {
+  font-size: 16px !important;
+  padding: 9px 12px !important;
+  min-width: 68px;
+}
+
+#counter {
+  font-size: 14px;
+  font-weight: 900;
+  min-width: 54px;
+  text-align: center;
+}
+
+#timer {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
+
+#geminiKey {
+  width: 145px;
+  background: rgba(255,255,255,.92);
+  color: #111;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+#categoriesInput {
+  width: 150px;
+  background: rgba(255,255,255,.92);
+  color: #111;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+#classifyStatus {
+  min-width: 58px;
+  font-size: 11px;
+  color: #fff7b1;
+}
+
+/* ===== 弾幕 左→右 ===== */
+#danmakuLayer {
+  position: absolute;
+  z-index: 30;
+  left: var(--frame-left);
+  right: var(--frame-right);
+  top: var(--frame-top);
+  bottom: var(--frame-bottom);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.danmaku {
+  position: absolute;
+  left: -40px;
+  white-space: nowrap;
+  font-size: 32px;
+  font-weight: 900;
+  color: white;
+  text-shadow:
+    2px 2px 0 #000,
+    -2px 2px 0 #000,
+    2px -2px 0 #000,
+    -2px -2px 0 #000,
+    0 0 10px rgba(0,0,0,.85);
+  animation: flyLeftToRight 5.8s linear forwards;
+}
+
+@keyframes flyLeftToRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(125vw); }
+}
+
+/* ===== ペン ===== */
+#drawCanvas {
+  position: absolute;
+  z-index: 40;
+  left: var(--frame-left);
+  right: var(--frame-right);
+  top: var(--frame-top);
+  bottom: var(--frame-bottom);
+  width: calc(100vw - var(--frame-left) - var(--frame-right));
+  height: calc(100vh - var(--frame-top) - var(--frame-bottom));
+  pointer-events: none;
+}
+
+#drawCanvas.drawing {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* ===== スマホ用：投稿だけ表示 ===== */
+body.postMode {
+  overflow: auto;
+  background: #eef6ff;
+  color: #111;
+}
+
+body.postMode #app {
+  min-height: 100vh;
+  height: auto;
+  background: #eef6ff;
+}
+
+body.postMode #stage,
+body.postMode .frame,
+body.postMode #danmakuLayer,
+body.postMode #drawCanvas {
+  display: none;
+}
+
+#postOnly {
+  display: none;
+}
+
+body.postMode #postOnly {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 16px;
+}
+
+.postCard {
+  width: min(520px, 100%);
+  background: white;
+  border-radius: 24px;
+  padding: 22px;
+  box-shadow: 0 16px 40px rgba(0,40,80,.18);
+}
+
+.postCard h1 {
+  margin: 0 0 10px;
+}
+
+.postCard p {
+  line-height: 1.7;
+  color: #475569;
+}
+
+.postCard input,
+.postCard textarea {
+  border: 1px solid #ccd6e0;
+  background: #fff;
+}
+
+.postCard button {
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  font-size: 20px;
+  padding: 14px;
+}
+
+#postOnlyStatus {
+  margin-top: 10px;
+  background: #f3f6f8;
+  border-radius: 12px;
+  padding: 10px;
+  font-weight: 800;
+}
+
+/* ===== その他 ===== */
+#fileInput { display: none; }
+
+@media(max-width: 1050px) {
+  body.stickyOnly #stickyBoard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :root {
+    --frame-left: 230px;
+    --frame-right: 260px;
+    --frame-bottom: 118px;
+  }
+
+  #timer { font-size: 20px; }
+  #geminiKey { width: 140px; }
+  #bottomControls button { font-size: 11px; padding: 6px 7px; }
+  .bigBtn { min-width: 56px; font-size: 14px !important; padding: 7px 9px !important; }
+}
+
+
+#copyright {
+  position: fixed;
+  right: 10px;
+  bottom: 4px;
+  z-index: 500;
+  font-size: 10px;
+  line-height: 1.2;
+  color: rgba(255,255,255,.72);
+  text-shadow: 0 1px 2px rgba(0,0,0,.75);
+  pointer-events: none;
+  white-space: nowrap;
+}
+body.postMode #copyright {
+  color: rgba(15,23,42,.58);
+  text-shadow: none;
+}
+
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <main id="stage">
+    <img id="slideImage" alt="slide">
+    <div id="startGuide">
+      <h1>Slide Overlay Fusen</h1>
+      <p>
+        PowerPointを画像として書き出し、複数画像を読み込んでください。<br>
+        左からコメントを投稿すると、コメントが左から右へ弾幕のように流れ、右側に新着順で付箋としてたまります。<br>
+        Gemini Keyを入れて分類すると、棒グラフ・円グラフで結果を見られます。
+      </p>
+      <button id="loadStartBtn" class="primary">スライド画像を読み込む</button>
+    </div>
+  </main>
+
+  <div id="topFrame" class="frame"></div>
+
+  <aside id="leftFrame" class="frame">
+    <div class="leftTitle">✍ 付箋投稿</div>
+    <p class="hint">この場での質問・感想・気づいたことを送ってください。送信後、弾幕で流れて右側に貼られます。</p>
+
+    <div class="field">
+      <label for="nameInput">名前（任意）</label>
+      <input id="nameInput" type="text" placeholder="ニックネーム">
+    </div>
+
+    <div class="field">
+      <label for="tagInput">タグ（任意）</label>
+      <input id="tagInput" type="text" placeholder="#質問 #感想 など">
+    </div>
+
+    <div class="field">
+      <label for="commentInput">コメント</label>
+      <textarea id="commentInput" placeholder="ここにコメントを書いてください"></textarea>
+    </div>
+
+    <button id="sendBtn" class="primary">送信 →</button>
+    <div id="formStatus">準備OK</div>
+
+    <div id="qrBox">
+      <button id="showQrBtn" type="button">📱 スマホ投稿用QRを表示</button>
+      <img id="qrCanvas" alt="投稿用QRコード">
+      <div id="qrUrl"></div>
+    </div>
+  </aside>
+
+  <aside id="rightFrame" class="frame">
+    <div class="rightHeader">
+      <h2>📌 みんなの付箋</h2>
+      <div id="noteCount">0件</div>
+      <div class="chartOpenButtons">
+        <button id="openBarBtn" type="button">棒グラフ</button>
+        <button id="openPieBtn" type="button">円グラフ</button>
+      </div>
+    </div>
+
+    <div id="boardTab" class="tabContent active">
+      <div id="stickyBoard"></div>
+    </div>
+  </aside>
+
+  <footer id="bottomFrame" class="frame">
+    <div id="bottomControls">
+      <div id="bottomLeft">
+        <button id="slideToggleBtn" class="toggleBtn active">スライドON</button>
+        <button id="stickyToggleBtn" class="toggleBtn active">付箋ON</button>
+        <button id="penBtn">ペン</button>
+        <button id="eraserBtn">消</button>
+        <input id="geminiKey" type="password" placeholder="Gemini Key">
+        <input id="categoriesInput" type="text" value="質問, 感想, 改善案, その他" title="分類カテゴリをカンマ区切りで入力">
+        <button id="classifyBtn">分類</button>
+        <span id="classifyStatus">未分類</span>
+        <button id="exportCsvBtn">保存</button>
+        <button id="clearAllBtn">全消去</button>
+      </div>
+
+      <div id="bottomCenter">
+        <button id="prevBtn" class="bigBtn">← 前</button>
+        <div id="counter">0 / 0</div>
+        <button id="nextBtn" class="bigBtn primary">次 →</button>
+      </div>
+
+      <div id="bottomRight">
+        <div id="timer">00:00</div>
+        <button id="timerBtn">開始</button>
+        <button id="fullBtn">全画面</button>
+      </div>
+    </div>
+  </footer>
+
+  <div id="danmakuLayer"></div>
+  <canvas id="drawCanvas"></canvas>
+  <input id="fileInput" type="file" accept="image/*" multiple>
+
+  <div id="qrModal">
+    <div class="qrModalCard">
+      <h2>投稿用QRコード</h2>
+      <p>スマホで読み取って投稿してください。ウインドウ右下をドラッグすると大きさを変えられます。</p>
+      <img id="qrModalCanvas" alt="投稿用QRコード">
+      <p id="qrModalUrl" style="word-break:break-all;font-size:12px;"></p>
+      <button id="closeQrModalBtn">閉じる</button>
+    </div>
+  </div>
+
+  <div id="chartModal">
+    <div class="chartModalCard">
+      <h2 id="chartModalTitle">グラフ</h2>
+      <canvas id="chartModalCanvas" width="820" height="620"></canvas>
+      <p id="chartModalHint" style="font-size:13px;color:#475569;line-height:1.6;">分類後の集計結果を表示します。</p>
+      <button id="closeChartModalBtn">閉じる</button>
+    </div>
+  </div>
+
+  <section id="postOnly">
+    <div class="postCard">
+      <h1>付箋コメント投稿</h1>
+      <p>送信すると、発表画面に弾幕として流れ、右側の窓枠に付箋として表示されます。</p>
+      <div class="field">
+        <label for="postNameInput">名前（任意）</label>
+        <input id="postNameInput" type="text" placeholder="ニックネーム">
+      </div>
+      <div class="field">
+        <label for="postTagInput">タグ（任意）</label>
+        <input id="postTagInput" type="text" placeholder="#質問 #感想 など">
+      </div>
+      <div class="field">
+        <label for="postCommentInput">コメント</label>
+        <textarea id="postCommentInput" placeholder="ここにコメントを書いてください"></textarea>
+      </div>
+      <button id="postSendBtn">送信</button>
+      <div id="postOnlyStatus">準備OK</div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* =========================================================
+   添付「AIふせんボード.html」と同じFirebase設定
+   Firestore collection: notes
+   fields: id, name, tag, text, category, createdAt, likes
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCPgjXJw9HQ2AUMzgN4O16s7UYjDllO87I",
+  authDomain: "aifusen-class.firebaseapp.com",
+  projectId: "aifusen-class",
+  storageBucket: "aifusen-class.appspot.com",
+  messagingSenderId: "414270455525",
+  appId: "1:414270455525:web:95444f14ee8306b6af1e0c",
+  measurementId: "G-H74HN1KZTY"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const POST_URL = "https://scd-ku.github.io/slidefusen/";
+const GEMINI_MODEL = "gemini-2.5-flash";
+
+const params = new URLSearchParams(location.search);
+const isPostMode = params.get("mode") === "post";
+
+if (isPostMode) {
+  document.body.classList.add("postMode");
+}
+
+const els = {
+  stage: document.getElementById("stage"),
+  slideImage: document.getElementById("slideImage"),
+  startGuide: document.getElementById("startGuide"),
+  fileInput: document.getElementById("fileInput"),
+  counter: document.getElementById("counter"),
+  stickyBoard: document.getElementById("stickyBoard"),
+  noteCount: document.getElementById("noteCount"),
+  qrCanvas: document.getElementById("qrCanvas"),
+  qrUrl: document.getElementById("qrUrl"),
+  qrModal: document.getElementById("qrModal"),
+  qrModalCanvas: document.getElementById("qrModalCanvas"),
+  qrModalUrl: document.getElementById("qrModalUrl"),
+  danmakuLayer: document.getElementById("danmakuLayer"),
+  drawCanvas: document.getElementById("drawCanvas"),
+  chartModal: document.getElementById("chartModal"),
+  chartModalCanvas: document.getElementById("chartModalCanvas"),
+  chartModalTitle: document.getElementById("chartModalTitle"),
+  chartModalHint: document.getElementById("chartModalHint"),
+  geminiKey: document.getElementById("geminiKey"),
+  categoriesInput: document.getElementById("categoriesInput"),
+  classifyStatus: document.getElementById("classifyStatus")
+};
+
+let slides = [];
+let slideIndex = 0;
+let slideZoom = 1;
+let notes = [];
+let displayedNotes = [];
+let stickyNodeSignatures = new Map();
+let lastStickyBoardKey = "";
+let seenIds = new Set();
+let initialNotesLoaded = false;
+let pendingDanmakuIds = new Set();
+let noteCounter = 1;
+
+let drawingMode = false;
+let eraserMode = false;
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+const ctx = els.drawCanvas.getContext("2d");
+
+// 古いブラウザで CSS.escape が無い場合の保険
+if (!window.CSS) window.CSS = {};
+if (!CSS.escape) {
+  CSS.escape = function(value) {
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+  };
+}
+
+let timerRunning = false;
+let timerStart = 0;
+let elapsedBefore = 0;
+let timerId = null;
+
+let currentChartType = "bar";
+let showSlidePane = true;
+let showStickyPane = true;
+
+function init() {
+  setupQr();
+  setupSlideEvents();
+  setupCommentEvents();
+  setupDrawingEvents();
+  setupTimerEvents();
+  setupChartModal();
+  setupViewToggles();
+  setupClassify();
+  setupDataButtons();
+  setupStickyActionEvents();
+  resizeCanvas();
+  listenNotes();
+
+  const savedKey = localStorage.getItem("slideFusenGeminiKey") || "";
+  els.geminiKey.value = savedKey;
+  const savedCategories = localStorage.getItem("slideFusenCategories");
+  if (savedCategories) els.categoriesInput.value = savedCategories;
+}
+
+/* ===== QR ===== */
+const QR_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAYwAAAGMCAIAAABGWwIdAAAHmElEQVR4nO3dMY4bMRBFQcvQ/a+8Th0ZDBrtx5mqA0iz0uqByQc/Pz8/vwCqfv/vBwD4F5EC0kQKSBMpIE2kgDSRAtJECkgTKSBNpIA0kQLSRApIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkgTKSBNpIA0kQLSRApI+0690OfzmXqp69TuLjz5Lqaeeep73/wMb/x8bjT1GTpJAWkiBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkDa23TtR27idmNpebe7Fpmzuzmzc7rL5fTlJAWkiBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkLa63TuxuQna3EydvFftPrja3XNPvZvvxFN/FyecpIA0kQLSRApIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkjLbffebHPft3mf4Kapz6e2X3szJykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkgTKSBNpIA0kQLSbPeW1DZum/u+E7U77Gz3OpykgDSRAtJECkgTKSBNpIA0kQLSRApIEykgTaSANJEC0kQKSMtt9566mapt5U7U7u+bui+v9jmfeOrv4oSTFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWmr270bN1NTprZpta3ciRv/rs3P582/ixNOUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaR93nyfV83UhmtzU1a7527zefx2djhJAWkiBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkDa23avdd1Z7nU21e9xq99PVvq8TtXsANz9DJykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkgTKSBNpIA0kQLSVrd7J27c0z31frpNN36nU27c3G2+l5MUkCZSQJpIAWkiBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaWPbvaM3i+2zTtR2eTduLU/UnmdTbXM3xXYPeAWRAtJECkgTKSBNpIA0kQLSRApIEykgTaSANJEC0kQKSPtuvlntzq8bX+fE5j7rzXvMTVPPfOO9lk5SQJpIAWkiBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpI1t92p7nymbO7gptbsUb1TbdZ546ns5SQFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJC2eu/e1M6rtpmaUrvjb+oetylT77V5B+KNap+PkxSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJAmUkCaSAFpq9u92s5rc0t4YnMPVds/1u6De/PdhbXncZIC0kQKSBMpIE2kgDSRAtJECkgTKSBNpIA0kQLSRApIEykgbWy7V9uC1e7d27wvb8qNm8QptWd+6v/GCScpIE2kgDSRAtJECkgTKSBNpIA0kQLSRApIEykgTaSANJEC0lbv3TuxeW9a7d69qfeq/V03PvPUe9U2pFM2/y4nKSBNpIA0kQLSRApIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJWt3u1u8NO1HZVb767sPZd3OjG+x+dpIA0kQLSRApIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkgb2+5t3pe3qbYl3FS7V662JZxS++3U/uedpIA0kQLSRApIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkj7bG6dNjdBm7uzG+8ye7PN76L2/1PbY55wkgLSRApIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkgTKSBtbLtX2w3VdoInnvrMte/rqW68c/CEkxSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJAmUkCaSAFp36kXmtoN1V5nyo3bxtpnWNtI3nhn5Y37UCcpIE2kgDSRAtJECkgTKSBNpIA0kQLSRApIEykgTaSANJEC0sa2e2++N+1ko7R599yN+77a80zZfOan3oHoJAWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJAmUkDa2HbvRG1XdaK2YzpR28HV3mvTjf/ztX2fkxSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJAmUkCaSAFpq9u9E5uboM1dVe1OtNqmrPZ3nTzPU3eCtb/LSQpIEykgTaSANJEC0kQKSBMpIE2kgDSRAtJECkgTKSBNpIC03HbvqWp3mW3ehbf5t29uAG+8T7C2yzvhJAWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJAmUkCa7d6Sp967t7lf21TbUU69Tm1LeMJJCkgTKSBNpIA0kQLSRApIEykgTaSANJEC0kQKSBMpIE2kgLTcdu/GndeJG++wO1F7nhO1Z77xjr/N36mTFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWmr273ahmvT5n15tS3Yptoz1+5JnLL5/+MkBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQNqntgkC+JuTFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWkiBaSJFJAmUkCaSAFpIgWkiRSQJlJAmkgBaSIFpIkUkCZSQJpIAWl/AMlZTCoADpEbAAAAAElFTkSuQmCC";
+
+function setupQr() {
+  if (els.qrUrl) els.qrUrl.textContent = POST_URL;
+  if (els.qrModalUrl) els.qrModalUrl.textContent = POST_URL;
+
+  // CDNのQRライブラリに依存せず、固定URLのQR画像をHTML内に埋め込んで表示します。
+  if (els.qrCanvas) {
+    els.qrCanvas.src = QR_DATA_URL;
+  }
+
+  if (els.qrModalCanvas) {
+    els.qrModalCanvas.src = QR_DATA_URL;
+  }
+}
+
+function showQrModal() {
+  setupQr();
+  if (els.qrModal) els.qrModal.classList.add("active");
+}
+
+/* ===== スライド ===== */
+function setupSlideEvents() {
+  document.getElementById("loadStartBtn").addEventListener("click", openFiles);
+  document.getElementById("showQrBtn").addEventListener("click", showQrModal);
+  document.getElementById("nextBtn").addEventListener("click", nextSlide);
+  document.getElementById("prevBtn").addEventListener("click", prevSlide);
+
+  // マウスホイール／トラックボールでスライドを拡大縮小
+  if (els.stage) {
+    els.stage.addEventListener("wheel", handleSlideWheelZoom, { passive: false });
+    // ダブルクリックで等倍に戻す
+    els.stage.addEventListener("dblclick", resetSlideZoom);
+  }
+  document.getElementById("closeQrModalBtn").addEventListener("click", () => els.qrModal.classList.remove("active"));
+  els.qrModal.addEventListener("click", e => {
+    if (e.target === els.qrModal) els.qrModal.classList.remove("active");
+  });
+
+  els.fileInput.addEventListener("change", e => {
+    if (e.target.files && e.target.files.length) loadFiles(e.target.files);
+  });
+
+  document.getElementById("fullBtn").addEventListener("click", () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    else document.exitFullscreen().catch(() => {});
+  });
+
+  window.addEventListener("keydown", e => {
+    const tag = e.target.tagName;
+    if (tag === "TEXTAREA" || tag === "INPUT") return;
+
+    if (e.key === "ArrowRight" || e.key === " ") {
+      e.preventDefault();
+      nextSlide();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      prevSlide();
+    } else if (e.key.toLowerCase() === "d") {
+      togglePen();
+    } else if (e.key.toLowerCase() === "e") {
+      toggleEraser();
+    } else if ((e.metaKey || e.ctrlKey) && (e.key === "+" || e.key === "=")) {
+      e.preventDefault();
+      slideZoom = Math.min(4.0, slideZoom + 0.1);
+      applySlideZoom();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === "-") {
+      e.preventDefault();
+      slideZoom = Math.max(0.35, slideZoom - 0.1);
+      applySlideZoom();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+      e.preventDefault();
+      resetSlideZoom();
+    }
+  });
+}
+
+function openFiles() {
+  els.fileInput.click();
+}
+
+function loadFiles(files) {
+  slides.forEach(s => URL.revokeObjectURL(s.url));
+  slides = [...files].sort(sortByNumber).map(file => ({
+    name: file.name,
+    url: URL.createObjectURL(file)
+  }));
+  slideIndex = 0;
+  showSlide();
+}
+
+function sortByNumber(a, b) {
+  const ax = a.name.match(/\d+/g);
+  const bx = b.name.match(/\d+/g);
+  const an = ax ? Number(ax[ax.length - 1]) : 0;
+  const bn = bx ? Number(bx[bx.length - 1]) : 0;
+  if (an !== bn) return an - bn;
+  return a.name.localeCompare(b.name, "ja");
+}
+
+function showSlide() {
+  if (!slides.length) return;
+  resetSlideZoom();
+  els.slideImage.src = slides[slideIndex].url;
+  els.slideImage.style.display = "block";
+  els.startGuide.style.display = "none";
+  els.counter.textContent = `${slideIndex + 1} / ${slides.length}`;
+}
+
+function nextSlide() {
+  if (!slides.length) return;
+  slideIndex = Math.min(slides.length - 1, slideIndex + 1);
+  showSlide();
+}
+
+function prevSlide() {
+  if (!slides.length) return;
+  slideIndex = Math.max(0, slideIndex - 1);
+  showSlide();
+}
+
+function applySlideZoom() {
+  if (!els.slideImage) return;
+  els.slideImage.style.setProperty("--slide-zoom", slideZoom);
+}
+
+function resetSlideZoom() {
+  slideZoom = 1;
+  applySlideZoom();
+}
+
+function handleSlideWheelZoom(e) {
+  if (!slides.length) return;
+  e.preventDefault();
+
+  // deltaYが上方向なら拡大、下方向なら縮小
+  const direction = e.deltaY < 0 ? 1 : -1;
+  const step = e.shiftKey ? 0.05 : 0.10;
+  slideZoom = Math.max(0.35, Math.min(4.0, slideZoom + direction * step));
+  applySlideZoom();
+}
+
+/* ===== Firebase notes ===== */
+function listenNotes() {
+  db.collection("notes").orderBy("createdAt", "desc")
+    .onSnapshot(snapshot => {
+      const incoming = [];
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const createdAt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : null;
+        incoming.push({
+          docId: doc.id,
+          id: d.id || doc.id,
+          name: d.name || " ",
+          tag: d.tag || "",
+          text: d.text || "",
+          category: d.category || "未分類",
+          timecode: d.timecode || "",
+          createdAt,
+          likes: d.likes || 0
+        });
+      });
+
+      notes = incoming;
+
+      const maxNum = notes.reduce((max, n) => {
+        const num = parseInt(String(n.id).replace(/\D/g, ""), 10);
+        return isNaN(num) ? max : Math.max(max, num);
+      }, 0);
+      noteCounter = maxNum + 1;
+
+      // 初回読み込みでは既存付箋をそのまま表示。
+      // 弾幕中のものがあれば renderStickyBoard 側で必ず非表示になります。
+      if (!initialNotesLoaded) {
+        initialNotesLoaded = true;
+        displayedNotes = incoming.slice();
+        seenIds = new Set(incoming.map(n => n.docId));
+        renderStickyBoard(displayedNotes);
+        renderCharts();
+        return;
+      }
+
+      // 新規投稿を判定
+      const newNotes = incoming.filter(n => !seenIds.has(n.docId));
+
+      if (newNotes.length > 0) {
+        // 新規投稿は、まず pending に入れる。
+        // これにより、どんな再描画が起きても右側付箋ボードにはまだ出ません。
+        newNotes.forEach(n => {
+          seenIds.add(n.docId);
+
+          if (!isPostMode) {
+            queueDanmakuThenSticky(n);
+          }
+        });
+
+        // 既存付箋だけ更新。新規分は renderStickyBoard 内で除外されます。
+        displayedNotes = incoming.slice();
+        renderStickyBoard(displayedNotes);
+        renderCharts();
+        return;
+      }
+
+      // 新規投稿以外、たとえばGemini分類結果の更新は通常どおり反映。
+      displayedNotes = incoming.slice();
+      renderStickyBoard(displayedNotes);
+      renderCharts();
+    }, error => {
+      console.error("Firestore listen error", error);
+      if (els.noteCount) els.noteCount.textContent = "Firestore読込エラー";
+    });
+}
+
+function queueDanmakuThenSticky(note) {
+  if (!note || !note.docId) return;
+
+  // 先にpendingへ入れることで、付箋ボードへの表示を弾幕終了まで止める。
+  pendingDanmakuIds.add(note.docId);
+
+  showDanmaku(note, () => {
+    pendingDanmakuIds.delete(note.docId);
+
+    // Firestoreの最新データが来ていればそれを使う。
+    // まだ来ていない場合は一時データで表示する。
+    const existsInNotes = notes.some(n => n.docId === note.docId);
+    if (existsInNotes) {
+      displayedNotes = notes.slice();
+    } else {
+      const withoutSame = displayedNotes.filter(n => n.docId !== note.docId);
+      displayedNotes = [note, ...withoutSame];
+    }
+
+    renderStickyBoard(displayedNotes);
+    renderCharts();
+  });
+}
+
+function noteDomSignature(n) {
+  // FirestoreのserverTimestampは、送信直後に null → Timestamp に変わることがあります。
+  // それを署名に含めると、同じ付箋でも再描画されるので、ここでは表示に必要な内容だけにします。
+  return [
+    n.docId,
+    n.id,
+    n.name,
+    n.tag,
+    n.category,
+    n.text,
+    n.timecode,
+    n.likes || 0
+  ].join("|");
+}
+
+function makeStickyBoardKey(list) {
+  return list.map(n => noteDomSignature(n)).join("||");
+}
+
+function noteHtml(n) {
+  const likes = Number(n.likes || 0);
+  const meterWidth = Math.min(100, likes * 10);
+  return `
+    <div class="note-author">
+      <span>${escapeHtml(n.name)}</span>
+      <span class="note-tag">${escapeHtml(n.category || n.tag || "未分類")}</span>
+    </div>
+    <div class="note-text">${escapeHtml(n.text)}</div>
+    <div class="note-time">${n.createdAt ? n.createdAt.toLocaleTimeString("ja-JP", {hour:"2-digit", minute:"2-digit"}) : ""}</div>
+    <div class="note-actions">
+      <button class="note-action-btn like-btn" type="button" title="いいね" data-action="like" data-doc-id="${escapeHtml(n.docId)}">♥</button>
+      <div class="like-meter" title="いいね数">
+        <div class="like-meter-fill" style="--like-width:${meterWidth}%"></div>
+      </div>
+      <span class="like-count">${likes}</span>
+      <button class="note-action-btn delete-note-btn" type="button" title="この付箋を削除" data-action="delete" data-doc-id="${escapeHtml(n.docId)}">🗑</button>
+    </div>
+  `;
+}
+
+function renderStickyBoard(list, options = {}) {
+  if (!els.stickyBoard) return;
+
+  // 弾幕中の新規付箋は必ず右側ボードから除外する。
+  const visibleList = list.filter(n => !pendingDanmakuIds.has(n.docId));
+
+  const latestFirst = visibleList.slice().sort((a, b) => {
+    const at = a.createdAt ? a.createdAt.getTime() : 0;
+    const bt = b.createdAt ? b.createdAt.getTime() : 0;
+    return bt - at;
+  });
+
+  const boardKey = makeStickyBoardKey(latestFirst);
+
+  // 全消去など、明示的に空にしたい時だけ完全クリア
+  if (options.force && latestFirst.length === 0) {
+    els.stickyBoard.replaceChildren();
+    stickyNodeSignatures.clear();
+    lastStickyBoardKey = "";
+    els.noteCount.textContent = "0件・新しい順";
+    return;
+  }
+
+  // 最重要：
+  // 送信直後のFirestore snapshotでは「新規付箋はpendingで非表示」なので、
+  // 右側ボードに表示すべき内容は送信前と同じです。
+  // この場合は noteCount も含めてDOMを一切触りません。
+  // これにより、既存付箋のリフレッシュ／点滅を防ぎます。
+  if (boardKey === lastStickyBoardKey) {
+    return;
+  }
+
+  lastStickyBoardKey = boardKey;
+  els.noteCount.textContent = `${latestFirst.length}件・新しい順`;
+
+  const wantedIds = new Set(latestFirst.map(n => n.docId));
+
+  // いらなくなった付箋だけ削除する
+  Array.from(els.stickyBoard.children).forEach(node => {
+    if (!wantedIds.has(node.dataset.docId)) {
+      stickyNodeSignatures.delete(node.dataset.docId);
+      node.remove();
+    }
+  });
+
+  // 必要なものだけ追加・更新・並べ替え。
+  // すでに正しい位置にあるノードは動かさない。
+  latestFirst.forEach((n, index) => {
+    const sig = noteDomSignature(n);
+    let node = els.stickyBoard.querySelector(`[data-doc-id="${CSS.escape(n.docId)}"]`);
+
+    if (!node) {
+      node = document.createElement("div");
+      node.className = "note";
+      node.dataset.docId = n.docId;
+      node.innerHTML = noteHtml(n);
+      stickyNodeSignatures.set(n.docId, sig);
+    } else if (stickyNodeSignatures.get(n.docId) !== sig) {
+      node.innerHTML = noteHtml(n);
+      stickyNodeSignatures.set(n.docId, sig);
+    }
+
+    const currentAtIndex = els.stickyBoard.children[index];
+    if (currentAtIndex !== node) {
+      els.stickyBoard.insertBefore(node, currentAtIndex || null);
+    }
+  });
+}
+
+async function addNote(name, tag, text, statusEl) {
+  if (!text.trim()) {
+    statusEl.textContent = "コメントを入力してください。";
+    return;
+  }
+
+  statusEl.textContent = "送信中...";
+
+  const id = `N${String(noteCounter).padStart(3, "0")}`;
+  noteCounter++;
+
+  const cleanName = name.trim() || " ";
+  const cleanTag = tag.trim();
+  const cleanText = text.trim();
+  const timecode = currentTimecode();
+
+  const localNote = {
+    docId: id,
+    id,
+    name: cleanName,
+    tag: cleanTag,
+    text: cleanText,
+    category: "未分類",
+    timecode,
+    createdAt: new Date(),
+    likes: 0
+  };
+
+  // 発表者画面の左フォームから投稿した場合は、
+  // Firestore反映を待たず、その瞬間に「弾幕 → 付箋」の順番を予約する。
+  if (!isPostMode) {
+    seenIds.add(id);
+    queueDanmakuThenSticky(localNote);
+    // 送信直後は右側ボードを一切触らない。
+    // 弾幕終了後に queueDanmakuThenSticky() から追加されます。
+  }
+
+  // 送信中表示は関数冒頭で実施済み
+  
+
+  try {
+    await db.collection("notes").doc(id).set({
+      id,
+      name: cleanName,
+      tag: cleanTag,
+      text: cleanText,
+      category: "未分類",
+      timecode,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      likes: 0
+    });
+    statusEl.textContent = "送信しました。";
+    setTimeout(() => statusEl.textContent = "準備OK", 1400);
+  } catch (e) {
+    console.error(e);
+    pendingDanmakuIds.delete(id);
+    statusEl.textContent = "保存中にエラーが発生しました。";
+  }
+}
+
+function setupCommentEvents() {
+  const sendBtn = document.getElementById("sendBtn");
+  const formStatus = document.getElementById("formStatus");
+
+  sendBtn.addEventListener("click", async () => {
+    const name = document.getElementById("nameInput").value;
+    const tag = document.getElementById("tagInput").value;
+    const textEl = document.getElementById("commentInput");
+    const old = textEl.value;
+    await addNote(name, tag, textEl.value, formStatus);
+    if (old.trim()) textEl.value = "";
+  });
+
+  document.getElementById("commentInput").addEventListener("keydown", e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  const postSendBtn = document.getElementById("postSendBtn");
+  const postStatus = document.getElementById("postOnlyStatus");
+  postSendBtn.addEventListener("click", async () => {
+    const name = document.getElementById("postNameInput").value;
+    const tag = document.getElementById("postTagInput").value;
+    const textEl = document.getElementById("postCommentInput");
+    const old = textEl.value;
+    await addNote(name, tag, textEl.value, postStatus);
+    if (old.trim()) textEl.value = "";
+  });
+}
+
+
+/* ===== 付箋ごとのいいね・削除 ===== */
+function setupStickyActionEvents() {
+  if (!els.stickyBoard) return;
+
+  els.stickyBoard.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const docId = btn.dataset.docId;
+    if (!docId) return;
+
+    if (btn.dataset.action === "like") {
+      await likeNote(docId, btn);
+    } else if (btn.dataset.action === "delete") {
+      await deleteOneNote(docId, btn);
+    }
+  });
+}
+
+async function likeNote(docId, btn) {
+  btn.disabled = true;
+  try {
+    await db.collection("notes").doc(docId).update({
+      likes: firebase.firestore.FieldValue.increment(1)
+    });
+  } catch (e) {
+    console.error(e);
+    alert("いいねの更新に失敗しました。Firestoreの権限を確認してください。");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteOneNote(docId, btn) {
+  const ok = confirm("この付箋を削除しますか？");
+  if (!ok) return;
+
+  btn.disabled = true;
+  try {
+    await db.collection("notes").doc(docId).delete();
+
+    // ローカル状態からもすぐ除外して、画面反映を早くします。
+    notes = notes.filter(n => n.docId !== docId);
+    displayedNotes = displayedNotes.filter(n => n.docId !== docId);
+    seenIds.delete(docId);
+    pendingDanmakuIds.delete(docId);
+    stickyNodeSignatures.delete(docId);
+    lastStickyBoardKey = "";
+
+    renderStickyBoard(displayedNotes);
+    renderCharts();
+  } catch (e) {
+    console.error(e);
+    alert("付箋の削除に失敗しました。Firestoreの権限を確認してください。");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+
+/* ===== グラフモーダル ===== */
+function setupChartModal() {
+  const openBarBtn = document.getElementById("openBarBtn");
+  const openPieBtn = document.getElementById("openPieBtn");
+  const closeChartModalBtn = document.getElementById("closeChartModalBtn");
+  if (!openBarBtn || !openPieBtn || !closeChartModalBtn || !els.chartModal) return;
+
+  openBarBtn.addEventListener("click", () => openChartModal("bar"));
+  openPieBtn.addEventListener("click", () => openChartModal("pie"));
+  closeChartModalBtn.addEventListener("click", () => els.chartModal.classList.remove("active"));
+  els.chartModal.addEventListener("click", e => {
+    if (e.target === els.chartModal) els.chartModal.classList.remove("active");
+  });
+}
+
+function openChartModal(type) {
+  currentChartType = type;
+  els.chartModalTitle.textContent = type === "bar" ? "分類結果：棒グラフ" : "分類結果：円グラフ";
+  els.chartModalHint.textContent = "分類カテゴリ：" + getCategories().join("、");
+  els.chartModal.classList.add("active");
+  renderCharts();
+}
+
+/* ===== 表示切替 ===== */
+function setupViewToggles() {
+  const slideBtn = document.getElementById("slideToggleBtn");
+  const stickyBtn = document.getElementById("stickyToggleBtn");
+  if (!slideBtn || !stickyBtn) return;
+
+  slideBtn.addEventListener("click", () => {
+    showSlidePane = !showSlidePane;
+    applyViewMode();
+  });
+  stickyBtn.addEventListener("click", () => {
+    showStickyPane = !showStickyPane;
+    applyViewMode();
+  });
+  applyViewMode();
+}
+
+function applyViewMode() {
+  if (isPostMode) return;
+  document.body.classList.remove("slideOnly", "stickyOnly", "controlsOnly");
+
+  const slideBtn = document.getElementById("slideToggleBtn");
+  const stickyBtn = document.getElementById("stickyToggleBtn");
+
+  slideBtn.classList.toggle("active", showSlidePane);
+  stickyBtn.classList.toggle("active", showStickyPane);
+  slideBtn.textContent = showSlidePane ? "スライドON" : "スライドOFF";
+  stickyBtn.textContent = showStickyPane ? "付箋ON" : "付箋OFF";
+
+  if (showSlidePane && !showStickyPane) {
+    document.body.classList.add("slideOnly");
+  } else if (!showSlidePane && showStickyPane) {
+    document.body.classList.add("stickyOnly");
+  } else if (!showSlidePane && !showStickyPane) {
+    document.body.classList.add("controlsOnly");
+  }
+  setTimeout(resizeCanvas, 80);
+}
+
+/* ===== Gemini分類 ===== */
+function setupClassify() {
+  document.getElementById("classifyBtn").addEventListener("click", classifyNotesWithGemini);
+  els.geminiKey.addEventListener("change", () => {
+    localStorage.setItem("slideFusenGeminiKey", els.geminiKey.value.trim());
+  });
+  els.categoriesInput.addEventListener("change", () => {
+    localStorage.setItem("slideFusenCategories", els.categoriesInput.value.trim());
+    renderCharts();
+  });
+}
+
+function getCategories() {
+  const raw = els.categoriesInput.value.trim() || "質問, 感想, 改善案, その他";
+  const cats = raw.split(",").map(s => s.trim()).filter(Boolean);
+  return cats.length ? cats : ["質問", "感想", "改善案", "その他"];
+}
+
+async function classifyNotesWithGemini() {
+  const apiKey = els.geminiKey.value.trim();
+  localStorage.setItem("slideFusenGeminiKey", apiKey);
+
+  if (!apiKey) {
+    els.classifyStatus.textContent = "Keyを入力";
+    return;
+  }
+  if (!notes.length) {
+    els.classifyStatus.textContent = "付箋なし";
+    return;
+  }
+
+  els.classifyStatus.textContent = "分類中...";
+
+  const targets = notes
+    .filter(n => n.text && n.text.trim())
+    .slice(0, 80)
+    .map(n => ({ id: n.id, text: n.text }));
+
+  const categories = getCategories();
+  localStorage.setItem("slideFusenCategories", categories.join(", "));
+  const prompt = `
+あなたは授業中の付箋コメントを分類する係です。
+各コメントを、次のカテゴリのどれか1つに分類してください。
+
+カテゴリ:
+${categories.map(c => "- " + c).join("\n")}
+
+必ずJSONだけで返してください。
+形式:
+[
+  {"id":"N001","category":"${categories[0]}"},
+  {"id":"N002","category":"${categories[Math.min(1, categories.length - 1)]}"}
+]
+
+コメント:
+${JSON.stringify(targets, null, 2)}
+`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t.slice(0, 180));
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    let results;
+    try {
+      results = JSON.parse(text);
+    } catch (e) {
+      results = JSON.parse(text.replace(/```json|```/g, "").trim());
+    }
+
+    const batch = db.batch();
+    let count = 0;
+
+    for (const r of results) {
+      const id = String(r.id || "");
+      const category = normalizeCategory(r.category);
+      const note = notes.find(n => n.id === id || n.docId === id);
+      if (!note) continue;
+      batch.update(db.collection("notes").doc(note.docId), { category });
+      count++;
+    }
+
+    await batch.commit();
+    els.classifyStatus.textContent = `${count}件分類`;
+  } catch (e) {
+    console.error(e);
+    els.classifyStatus.textContent = "分類エラー";
+    alert("Gemini分類でエラーが出ました。\nAPI Key、Gemini APIの有効化、ブラウザの通信制限を確認してください。\n\n" + e.message);
+  }
+}
+
+function normalizeCategory(cat) {
+  const c = String(cat || "").trim();
+  const categories = getCategories();
+  const exact = categories.find(x => x === c);
+  if (exact) return exact;
+  const partial = categories.find(x => c.includes(x) || x.includes(c));
+  if (partial) return partial;
+  return categories[categories.length - 1] || "その他";
+}
+
+
+/* ===== グラフ ===== */
+function categoryCounts() {
+  const counts = {};
+  getCategories().forEach(cat => counts[cat] = 0);
+  notes.forEach(n => {
+    const cat = n.category || "未分類";
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  return counts;
+}
+
+
+function renderCharts() {
+  if (!els.chartModal || !els.chartModal.classList.contains("active")) return;
+  if (currentChartType === "bar") renderBarChart();
+  else renderPieChart();
+}
+
+function chartColors(i) {
+  const colors = ["#60a5fa", "#fbbf24", "#34d399", "#f87171", "#a78bfa", "#fb7185"];
+  return colors[i % colors.length];
+}
+
+function renderBarChart() {
+  const canvas = els.chartModalCanvas;
+  if (!canvas) return;
+  const c = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  c.clearRect(0, 0, w, h);
+  c.fillStyle = "#ffffff";
+  c.fillRect(0, 0, w, h);
+
+  const counts = categoryCounts();
+  const labels = Object.keys(counts);
+  if (!labels.length) {
+    drawNoData(c, w, h);
+    return;
+  }
+
+  const max = Math.max(...labels.map(l => counts[l]), 1);
+  const left = 95, right = 30, top = 40, bottom = 70;
+  const chartW = w - left - right;
+  const chartH = h - top - bottom;
+  const barGap = 18;
+  const barW = Math.max(28, (chartW - barGap * (labels.length - 1)) / labels.length);
+
+  c.fillStyle = "#111827";
+  c.font = "bold 26px system-ui";
+  c.fillText("カテゴリ別件数", 24, 32);
+
+  c.strokeStyle = "#d1d5db";
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(left, top);
+  c.lineTo(left, top + chartH);
+  c.lineTo(left + chartW, top + chartH);
+  c.stroke();
+
+  labels.forEach((label, i) => {
+    const val = counts[label];
+    const x = left + i * (barW + barGap);
+    const barH = chartH * val / max;
+    const y = top + chartH - barH;
+
+    c.fillStyle = chartColors(i);
+    c.fillRect(x, y, barW, barH);
+
+    c.fillStyle = "#111827";
+    c.font = "bold 24px system-ui";
+    c.textAlign = "center";
+    c.fillText(String(val), x + barW / 2, y - 8);
+
+    c.font = "20px system-ui";
+    c.save();
+    c.translate(x + barW / 2, top + chartH + 28);
+    c.rotate(-Math.PI / 8);
+    c.fillText(label, 0, 0);
+    c.restore();
+  });
+
+  c.textAlign = "left";
+}
+
+function renderPieChart() {
+  const canvas = els.chartModalCanvas;
+  if (!canvas) return;
+  const c = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  c.clearRect(0, 0, w, h);
+  c.fillStyle = "#ffffff";
+  c.fillRect(0, 0, w, h);
+
+  const counts = categoryCounts();
+  const labels = Object.keys(counts);
+  const total = labels.reduce((sum, l) => sum + counts[l], 0);
+  if (!total) {
+    drawNoData(c, w, h);
+    return;
+  }
+
+  c.fillStyle = "#111827";
+  c.font = "bold 26px system-ui";
+  c.fillText("カテゴリ比率", 24, 32);
+
+  const cx = 230, cy = 270, r = 150;
+  let start = -Math.PI / 2;
+
+  labels.forEach((label, i) => {
+    const val = counts[label];
+    const angle = Math.PI * 2 * val / total;
+    c.beginPath();
+    c.moveTo(cx, cy);
+    c.arc(cx, cy, r, start, start + angle);
+    c.closePath();
+    c.fillStyle = chartColors(i);
+    c.fill();
+
+    const mid = start + angle / 2;
+    const tx = cx + Math.cos(mid) * (r * 0.62);
+    const ty = cy + Math.sin(mid) * (r * 0.62);
+    c.fillStyle = "#111827";
+    c.font = "bold 20px system-ui";
+    c.textAlign = "center";
+    c.fillText(`${Math.round(val / total * 100)}%`, tx, ty);
+
+    start += angle;
+  });
+
+  c.textAlign = "left";
+  labels.forEach((label, i) => {
+    const y = 140 + i * 42;
+    c.fillStyle = chartColors(i);
+    c.fillRect(430, y - 18, 26, 26);
+    c.fillStyle = "#111827";
+    c.font = "20px system-ui";
+    c.fillText(`${label}：${counts[label]}件`, 466, y + 2);
+  });
+}
+
+function drawNoData(c, w, h) {
+  c.fillStyle = "#ffffff";
+  c.fillRect(0, 0, w, h);
+  c.fillStyle = "#475569";
+  c.font = "24px system-ui";
+  c.textAlign = "center";
+  c.fillText("データがありません", w / 2, h / 2);
+  c.textAlign = "left";
+}
+
+/* ===== 弾幕 左→右 ===== */
+function showDanmaku(note, afterFly) {
+  if (!els.danmakuLayer) {
+    if (typeof afterFly === "function") afterFly();
+    return;
+  }
+
+  const d = document.createElement("div");
+  d.className = "danmaku";
+  d.textContent = note.text;
+
+  const h = els.danmakuLayer.clientHeight || 400;
+  const lanes = Math.max(3, Math.floor(h / 54));
+  const lane = Math.floor(Math.random() * lanes);
+
+  // 速く反応して見えるように、弾幕時間を短縮。
+  // 画面左端すぐ外から出るので、送信直後にほぼ即表示されます。
+  const duration = 2.2 + Math.random() * 0.6;
+
+  d.style.top = (lane * 54 + 12) + "px";
+  d.style.animationDuration = duration + "s";
+
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    d.remove();
+    if (typeof afterFly === "function") afterFly();
+  };
+
+  d.addEventListener("animationend", finish, { once: true });
+  els.danmakuLayer.appendChild(d);
+
+  // 保険：animationend が取れない場合でも付箋表示へ進める
+  setTimeout(finish, duration * 1000 + 120);
+}
+
+/* ===== ペン ===== */
+function setupDrawingEvents() {
+  document.getElementById("penBtn").addEventListener("click", togglePen);
+  document.getElementById("eraserBtn").addEventListener("click", toggleEraser);
+
+  els.drawCanvas.addEventListener("mousedown", beginDraw);
+  els.drawCanvas.addEventListener("mousemove", moveDraw);
+  window.addEventListener("mouseup", () => { isDrawing = false; });
+
+  els.drawCanvas.addEventListener("touchstart", beginDraw, { passive: false });
+  els.drawCanvas.addEventListener("touchmove", moveDraw, { passive: false });
+  window.addEventListener("touchend", () => { isDrawing = false; });
+
+  window.addEventListener("resize", resizeCanvas);
+}
+
+function resizeCanvas() {
+  const r = els.drawCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const old = document.createElement("canvas");
+  old.width = els.drawCanvas.width;
+  old.height = els.drawCanvas.height;
+  if (old.width && old.height) old.getContext("2d").drawImage(els.drawCanvas, 0, 0);
+
+  els.drawCanvas.width = Math.floor(r.width * dpr);
+  els.drawCanvas.height = Math.floor(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  if (old.width && old.height) ctx.drawImage(old, 0, 0, r.width, r.height);
+}
+
+function togglePen() {
+  drawingMode = !drawingMode;
+  eraserMode = false;
+  els.drawCanvas.classList.toggle("drawing", drawingMode);
+  document.getElementById("penBtn").classList.toggle("primary", drawingMode);
+  document.getElementById("eraserBtn").classList.remove("primary");
+}
+
+function toggleEraser() {
+  drawingMode = true;
+  eraserMode = !eraserMode;
+  els.drawCanvas.classList.add("drawing");
+  document.getElementById("eraserBtn").classList.toggle("primary", eraserMode);
+  document.getElementById("penBtn").classList.toggle("primary", !eraserMode);
+}
+
+function beginDraw(e) {
+  if (!drawingMode) return;
+  e.preventDefault();
+  isDrawing = true;
+  const p = getPoint(e);
+  lastX = p.x;
+  lastY = p.y;
+}
+
+function moveDraw(e) {
+  if (!isDrawing || !drawingMode) return;
+  e.preventDefault();
+  const p = getPoint(e);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = eraserMode ? 34 : 8;
+  ctx.globalCompositeOperation = eraserMode ? "destination-out" : "source-over";
+  ctx.strokeStyle = "#ff0000";
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  ctx.restore();
+  lastX = p.x;
+  lastY = p.y;
+}
+
+function getPoint(e) {
+  const r = els.drawCanvas.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return { x: p.clientX - r.left, y: p.clientY - r.top };
+}
+
+/* ===== タイマー ===== */
+function setupTimerEvents() {
+  document.getElementById("timerBtn").addEventListener("click", toggleTimer);
+}
+
+function toggleTimer() {
+  const btn = document.getElementById("timerBtn");
+  if (timerRunning) {
+    elapsedBefore += performance.now() - timerStart;
+    timerRunning = false;
+    clearInterval(timerId);
+    timerId = null;
+    btn.textContent = "再開";
+  } else {
+    timerStart = performance.now();
+    timerRunning = true;
+    timerId = setInterval(updateTimer, 250);
+    btn.textContent = "停止";
+  }
+  updateTimer();
+}
+
+function updateTimer() {
+  const now = performance.now();
+  const elapsed = elapsedBefore + (timerRunning ? now - timerStart : 0);
+  document.getElementById("timer").textContent = formatTime(elapsed);
+}
+
+function currentTimecode() {
+  return document.getElementById("timer").textContent || "00:00";
+}
+
+function formatTime(ms) {
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+
+/* ===== CSV保存・全消去 ===== */
+function setupDataButtons() {
+  document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
+  document.getElementById("clearAllBtn").addEventListener("click", clearAllNotes);
+}
+
+function csvEscape(value) {
+  const v = (value ?? "").toString().replace(/"/g, '""');
+  return `"${v}"`;
+}
+
+function exportCsv() {
+  if (!notes.length) {
+    alert("保存する付箋がありません。");
+    return;
+  }
+
+  const header = ["id", "timecode", "createdAt", "name", "tag", "category", "likes", "comment"];
+  const lines = [header.join(",")];
+
+  notes
+    .slice()
+    .sort((a, b) => {
+      const at = a.createdAt ? a.createdAt.getTime() : 0;
+      const bt = b.createdAt ? b.createdAt.getTime() : 0;
+      return at - bt;
+    })
+    .forEach(n => {
+      const created = n.createdAt instanceof Date ? n.createdAt.toISOString() : "";
+      const timecode = n.timecode || (n.createdAt instanceof Date
+        ? n.createdAt.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+        : "");
+      const row = [
+        n.id,
+        timecode,
+        created,
+        n.name,
+        n.tag,
+        n.category,
+        n.likes || 0,
+        n.text
+      ].map(csvEscape).join(",");
+      lines.push(row);
+    });
+
+  const csv = "\ufeff" + lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  a.href = url;
+  a.download = `slidefusen_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function clearAllNotes() {
+  if (!notes.length) {
+    alert("消去する付箋がありません。");
+    return;
+  }
+  const ok = confirm("送信された付箋データをすべて消去します。よろしいですか？\nこの操作は元に戻せません。");
+  if (!ok) return;
+
+  const btn = document.getElementById("clearAllBtn");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "消去中";
+
+  try {
+    const snapshot = await db.collection("notes").get();
+    const batchSize = 400;
+    let batch = db.batch();
+    let count = 0;
+    let total = 0;
+
+    for (const doc of snapshot.docs) {
+      batch.delete(doc.ref);
+      count++;
+      total++;
+      if (count >= batchSize) {
+        await batch.commit();
+        batch = db.batch();
+        count = 0;
+      }
+    }
+    if (count > 0) await batch.commit();
+
+    seenIds = new Set();
+    displayedNotes = [];
+    pendingDanmakuIds = new Set();
+    stickyNodeSignatures.clear();
+    lastStickyBoardKey = "";
+    initialNotesLoaded = false;
+    renderStickyBoard([], { force: true });
+    renderCharts();
+    alert(`${total}件の付箋を消去しました。`);
+  } catch (e) {
+    console.error(e);
+    alert("消去中にエラーが発生しました。Firestoreの権限を確認してください。");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+
+/* ===== utility ===== */
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
+}
+// HTML・定数・関数をすべて読み込んだ後に初期化
+init();
+</script>
+
+<div id="copyright">Science Comunication Laboratory, Kagawa University</div>
+</body>
+</html>
