@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Slide Overlay Fusen + Gemini Charts</title>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -718,24 +718,29 @@ body.controlsOnly #bottomControls {
   cursor: crosshair;
 }
 
-/* ===== スマホ用：投稿だけ表示 ===== */
+/* ===== スマホ用：投稿画面 ===== */
 body.postMode {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: #eef6ff;
   color: #111;
 }
 
 body.postMode #app {
+  width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   height: auto;
   background: #eef6ff;
+  overflow: visible;
 }
 
 body.postMode #stage,
 body.postMode .frame,
 body.postMode #danmakuLayer,
 body.postMode #drawCanvas {
-  display: none;
+  display: none !important;
 }
 
 #postOnly {
@@ -743,49 +748,204 @@ body.postMode #drawCanvas {
 }
 
 body.postMode #postOnly {
-  display: grid;
+  display: block;
+  width: 100%;
   min-height: 100vh;
-  place-items: center;
-  padding: 16px;
+  min-height: 100dvh;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
 }
 
 .postCard {
-  width: min(520px, 100%);
+  width: min(560px, 100%);
+  margin: 0 auto;
   background: white;
-  border-radius: 24px;
-  padding: 22px;
-  box-shadow: 0 16px 40px rgba(0,40,80,.18);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 10px 28px rgba(0,40,80,.14);
 }
 
 .postCard h1 {
   margin: 0 0 10px;
+  font-size: clamp(23px, 7vw, 30px);
+  line-height: 1.25;
 }
 
 .postCard p {
-  line-height: 1.7;
+  margin: 10px 0 14px;
+  line-height: 1.6;
   color: #475569;
+  font-size: 14px;
+}
+
+.postCard .field {
+  margin-bottom: 12px;
+  gap: 6px;
+}
+
+.postCard .field label {
+  color: #334155;
+  font-size: 13px;
 }
 
 .postCard input,
 .postCard textarea {
-  border: 1px solid #ccd6e0;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
   background: #fff;
+  color: #111827;
+  border-radius: 12px;
+  padding: 12px;
+  /* iOS Safariは16px未満の入力欄で自動ズームするため16px以上に固定 */
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.postCard textarea {
+  min-height: 128px;
+  height: 128px;
+  resize: vertical;
 }
 
 .postCard button {
   width: 100%;
+  min-height: 48px;
   background: var(--accent);
   border: none;
-  font-size: 20px;
-  padding: 14px;
+  border-radius: 12px;
+  font-size: 17px;
+  padding: 12px 14px;
+  touch-action: manipulation;
+}
+
+.postCard button:disabled {
+  opacity: .45;
+}
+
+/* 生徒側：現在のスライド */
+#studentSlidePanel {
+  margin: 0 0 14px;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.studentSlideHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+#studentSlideViewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #111827;
+}
+
+#studentSlideImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: none;
+  background: #111827;
+  cursor: zoom-in;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#studentSlideEmpty {
+  padding: 16px;
+  color: #cbd5e1;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#studentSlideImage.expanded {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: block !important;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  object-fit: contain;
+  background: rgba(0,0,0,.96);
+  cursor: zoom-out;
+}
+
+#postRoomStatus {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: #eef2f7;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 #postOnlyStatus {
   margin-top: 10px;
   background: #f3f6f8;
-  border-radius: 12px;
-  padding: 10px;
+  color: #334155;
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 13px;
   font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+body.postMode #copyright {
+  position: static;
+  display: block;
+  padding: 4px 12px calc(10px + env(safe-area-inset-bottom));
+  color: rgba(15,23,42,.58);
+  text-shadow: none;
+  text-align: center;
+  white-space: normal;
+}
+
+@media (max-width: 430px) {
+  body.postMode #postOnly {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .postCard {
+    padding: 14px;
+    border-radius: 16px;
+    box-shadow: 0 6px 18px rgba(0,40,80,.12);
+  }
+
+  .postCard h1 {
+    font-size: 24px;
+  }
+
+  .postCard p {
+    font-size: 13px;
+  }
 }
 
 /* ===== その他 ===== */
@@ -820,10 +980,6 @@ body.postMode #postOnly {
   text-shadow: 0 1px 2px rgba(0,0,0,.75);
   pointer-events: none;
   white-space: nowrap;
-}
-body.postMode #copyright {
-  color: rgba(15,23,42,.58);
-  text-shadow: none;
 }
 
 
@@ -1020,7 +1176,19 @@ body.postMode #copyright {
     <div class="postCard">
       <h1>付箋コメント投稿</h1>
       <div id="postRoomStatus">授業を確認しています…</div>
-      <p>送信すると、発表画面に弾幕として流れ、右側の窓枠に付箋として表示されます。</p>
+
+      <div id="studentSlidePanel">
+        <div class="studentSlideHeader">
+          <span>現在のスライド</span>
+          <span id="studentSlideCounter">未表示</span>
+        </div>
+        <div id="studentSlideViewport">
+          <img id="studentSlideImage" alt="現在のスライド">
+          <div id="studentSlideEmpty">先生がスライドを表示すると、ここに同じ画像が表示されます。</div>
+        </div>
+      </div>
+
+      <p>画像を確認しながら、質問・感想・気づいたことを送信できます。画像をタップすると拡大表示できます。</p>
       <div class="field">
         <label for="postNameInput">名前（任意）</label>
         <input id="postNameInput" type="text" placeholder="ニックネーム">
@@ -1069,6 +1237,7 @@ let currentUser = null;
 let currentRoomId = null;
 let isTeacher = false;
 let unsubscribeNotes = null;
+let unsubscribeRoom = null;
 let authReady = false;
 let authSetupError = null;
 
@@ -1122,11 +1291,16 @@ const els = {
   joinRoomInput: document.getElementById("joinRoomInput"),
   joinRoomBtn: document.getElementById("joinRoomBtn"),
   copyStudentUrlBtn: document.getElementById("copyStudentUrlBtn"),
-  postRoomStatus: document.getElementById("postRoomStatus")
+  postRoomStatus: document.getElementById("postRoomStatus"),
+  studentSlideImage: document.getElementById("studentSlideImage"),
+  studentSlideEmpty: document.getElementById("studentSlideEmpty"),
+  studentSlideCounter: document.getElementById("studentSlideCounter")
 };
 
 let slides = [];
 let slideIndex = 0;
+let slideSyncToken = 0;
+let lastSyncedSlideKey = "";
 let slideZoom = 1;
 let notes = [];
 let displayedNotes = [];
@@ -1172,6 +1346,7 @@ function init() {
   setupDataButtons();
   setupStickyActionEvents();
   setupRoomEvents();
+  setupStudentSlidePreview();
   resizeCanvas();
 
   // Gemini APIキーは共用端末に残さない。
@@ -1383,7 +1558,9 @@ function loadFiles(files) {
   slides.forEach(s => URL.revokeObjectURL(s.url));
   slides = [...files].sort(sortByNumber).map(file => ({
     name: file.name,
-    url: URL.createObjectURL(file)
+    file,
+    url: URL.createObjectURL(file),
+    studentPreview: null
   }));
   slideIndex = 0;
   showSlide();
@@ -1405,6 +1582,13 @@ function showSlide() {
   els.slideImage.style.display = "block";
   els.startGuide.style.display = "none";
   els.counter.textContent = `${slideIndex + 1} / ${slides.length}`;
+
+  // 教員が表示中のスライドを、生徒用画面へ同期する。
+  if (isTeacher && currentRoomId) {
+    syncCurrentSlideToRoom().catch(error => {
+      console.error("Slide sync error", error);
+    });
+  }
 }
 
 function nextSlide() {
@@ -1438,6 +1622,128 @@ function handleSlideWheelZoom(e) {
   const step = e.shiftKey ? 0.05 : 0.10;
   slideZoom = Math.max(0.35, Math.min(4.0, slideZoom + direction * step));
   applySlideZoom();
+}
+
+/* ===== 生徒画面へのスライド同期 ===== */
+function setupStudentSlidePreview() {
+  if (!els.studentSlideImage) return;
+  els.studentSlideImage.addEventListener("click", () => {
+    if (!els.studentSlideImage.src) return;
+    els.studentSlideImage.classList.toggle("expanded");
+  });
+}
+
+function listenRoomState() {
+  if (unsubscribeRoom) {
+    unsubscribeRoom();
+    unsubscribeRoom = null;
+  }
+  if (!currentRoomId) return;
+
+  unsubscribeRoom = roomRef().onSnapshot(snapshot => {
+    if (!snapshot.exists) return;
+    const data = snapshot.data() || {};
+    updateStudentSlidePreview(data);
+  }, error => {
+    console.error("Room state listen error", error);
+  });
+}
+
+function updateStudentSlidePreview(data) {
+  if (!isPostMode || !els.studentSlideImage) return;
+
+  const image = data.currentSlideImage || "";
+  const index = Number(data.currentSlideIndex);
+  const total = Number(data.totalSlides);
+
+  if (image) {
+    if (els.studentSlideImage.src !== image) {
+      els.studentSlideImage.src = image;
+    }
+    els.studentSlideImage.style.display = "block";
+    if (els.studentSlideEmpty) els.studentSlideEmpty.style.display = "none";
+  } else {
+    els.studentSlideImage.removeAttribute("src");
+    els.studentSlideImage.style.display = "none";
+    els.studentSlideImage.classList.remove("expanded");
+    if (els.studentSlideEmpty) els.studentSlideEmpty.style.display = "block";
+  }
+
+  if (els.studentSlideCounter) {
+    els.studentSlideCounter.textContent =
+      Number.isFinite(index) && Number.isFinite(total) && total > 0
+        ? `${index + 1} / ${total}`
+        : "未表示";
+  }
+}
+
+async function makeStudentSlidePreview(slide) {
+  if (!slide) return "";
+  if (slide.studentPreview) return slide.studentPreview;
+
+  const image = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = slide.url;
+  });
+
+  let maxWidth = 1280;
+  let maxHeight = 720;
+  let quality = 0.78;
+  let dataUrl = "";
+
+  // Firestore 1ドキュメント上限を十分下回るまで自動的に軽量化する。
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const c = canvas.getContext("2d", { alpha: false });
+    c.fillStyle = "#ffffff";
+    c.fillRect(0, 0, width, height);
+    c.drawImage(image, 0, 0, width, height);
+
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+    // 60万文字程度ならFirestoreの他フィールドを含めても余裕がある。
+    if (dataUrl.length <= 600000) break;
+    maxWidth = Math.round(maxWidth * 0.82);
+    maxHeight = Math.round(maxHeight * 0.82);
+    quality = Math.max(0.52, quality - 0.08);
+  }
+
+  if (dataUrl.length > 760000) {
+    throw new Error("生徒用画像を十分に軽量化できませんでした。");
+  }
+
+  slide.studentPreview = dataUrl;
+  return dataUrl;
+}
+
+async function syncCurrentSlideToRoom() {
+  if (!isTeacher || !currentRoomId || !slides.length) return;
+
+  const token = ++slideSyncToken;
+  const slide = slides[slideIndex];
+  const key = `${currentRoomId}:${slideIndex}:${slides.length}:${slide.name}`;
+  if (key === lastSyncedSlideKey) return;
+
+  const preview = await makeStudentSlidePreview(slide);
+  if (token !== slideSyncToken) return;
+
+  await roomRef().update({
+    currentSlideImage: preview,
+    currentSlideIndex: slideIndex,
+    totalSlides: slides.length,
+    currentSlideName: slide.name,
+    slideUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  lastSyncedSlideKey = key;
 }
 
 /* ===== 授業ルーム / 匿名認証 ===== */
@@ -1531,6 +1837,14 @@ async function loadRoom(roomId) {
   lastStickyBoardKey = "";
   initialNotesLoaded = false;
   listenNotes();
+  listenRoomState();
+
+  if (isTeacher && slides.length) {
+    lastSyncedSlideKey = "";
+    syncCurrentSlideToRoom().catch(error => {
+      console.error("Initial slide sync error", error);
+    });
+  }
 }
 
 async function createRoom() {
@@ -1554,7 +1868,10 @@ async function createRoom() {
         await ref.set({
           ownerUid: currentUser.uid,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          app: "slidefusen"
+          app: "slidefusen",
+          currentSlideImage: "",
+          currentSlideIndex: null,
+          totalSlides: 0
         });
         roomId = candidate;
         break;
