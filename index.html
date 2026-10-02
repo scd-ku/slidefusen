@@ -6,6 +6,7 @@
 <title>Slide Overlay Fusen + Gemini Charts</title>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
@@ -825,6 +826,64 @@ body.postMode #copyright {
   text-shadow: none;
 }
 
+
+/* ===== 授業ルーム ===== */
+#roomBox {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 12px;
+  background: rgba(255,255,255,.08);
+}
+#roomStatusLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+#roomCodeLabel {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+#roleBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(255,255,255,.16);
+  font-size: 11px;
+  font-weight: 800;
+}
+#roomControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#roomControls input {
+  width: 100%;
+  min-width: 0;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+#roomNotice {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: .82;
+}
+#postRoomStatus {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: #eef2f7;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 </style>
 </head>
 
@@ -848,6 +907,21 @@ body.postMode #copyright {
 
   <aside id="leftFrame" class="frame">
     <div class="leftTitle">✍ 付箋投稿</div>
+
+    <div id="roomBox">
+      <div id="roomStatusLine">
+        <span>授業:</span>
+        <span id="roomCodeLabel">未参加</span>
+        <span id="roleBadge">認証準備中</span>
+      </div>
+      <div id="roomControls">
+        <button id="createRoomBtn" type="button" disabled>新しい授業を始める</button>
+        <input id="joinRoomInput" type="text" maxlength="6" placeholder="授業コード">
+        <button id="joinRoomBtn" type="button" disabled>参加</button>
+        <button id="copyStudentUrlBtn" type="button" hidden>生徒用URLをコピー</button>
+      </div>
+      <p id="roomNotice">Firebase匿名認証を準備しています。</p>
+    </div>
     <p class="hint">この場での質問・感想・気づいたことを送ってください。送信後、弾幕で流れて右側に貼られます。</p>
 
     <div class="field">
@@ -945,6 +1019,7 @@ body.postMode #copyright {
   <section id="postOnly">
     <div class="postCard">
       <h1>付箋コメント投稿</h1>
+      <div id="postRoomStatus">授業を確認しています…</div>
       <p>送信すると、発表画面に弾幕として流れ、右側の窓枠に付箋として表示されます。</p>
       <div class="field">
         <label for="postNameInput">名前（任意）</label>
@@ -971,23 +1046,48 @@ body.postMode #copyright {
    fields: id, name, tag, text, category, createdAt, likes
    ========================================================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyCPgjXJw9HQ2AUMzgN4O16s7UYjDllO87I",
-  authDomain: "aifusen-class.firebaseapp.com",
-  projectId: "aifusen-class",
-  storageBucket: "aifusen-class.appspot.com",
-  messagingSenderId: "414270455525",
-  appId: "1:414270455525:web:95444f14ee8306b6af1e0c",
-  measurementId: "G-H74HN1KZTY"
+  apiKey: "AIzaSyBOEsWP73K9kpAR1nFTjVkAvS-1pFYGSG0",
+  authDomain: "scd-ku-slidefusen.firebaseapp.com",
+  projectId: "scd-ku-slidefusen",
+  storageBucket: "scd-ku-slidefusen.firebasestorage.app",
+  messagingSenderId: "386302488438",
+  appId: "1:386302488438:web:44a0beb1250bd6526a5457",
+  measurementId: "G-N93KY2N8V9"
 };
 
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.firestore();
 
-const POST_URL = "https://scd-ku.github.io/slidefusen/";
+const APP_URL = "https://scd-ku.github.io/slidefusen/";
 const GEMINI_MODEL = "gemini-2.5-flash";
 
 const params = new URLSearchParams(location.search);
 const isPostMode = params.get("mode") === "post";
+
+let currentUser = null;
+let currentRoomId = null;
+let isTeacher = false;
+let unsubscribeNotes = null;
+let authReady = false;
+let authSetupError = null;
+
+function roomRef(roomId = currentRoomId) {
+  return db.collection("rooms").doc(roomId);
+}
+
+function notesCollection() {
+  if (!currentRoomId) throw new Error("授業ルームに参加していません。");
+  return roomRef().collection("notes");
+}
+
+function studentPostUrl() {
+  if (!currentRoomId) return null;
+  const url = new URL(APP_URL);
+  url.searchParams.set("mode", "post");
+  url.searchParams.set("room", currentRoomId);
+  return url.toString();
+}
 
 if (isPostMode) {
   document.body.classList.add("postMode");
@@ -1014,7 +1114,15 @@ const els = {
   chartModalHint: document.getElementById("chartModalHint"),
   geminiKey: document.getElementById("geminiKey"),
   categoriesInput: document.getElementById("categoriesInput"),
-  classifyStatus: document.getElementById("classifyStatus")
+  classifyStatus: document.getElementById("classifyStatus"),
+  roomCodeLabel: document.getElementById("roomCodeLabel"),
+  roleBadge: document.getElementById("roleBadge"),
+  roomNotice: document.getElementById("roomNotice"),
+  createRoomBtn: document.getElementById("createRoomBtn"),
+  joinRoomInput: document.getElementById("joinRoomInput"),
+  joinRoomBtn: document.getElementById("joinRoomBtn"),
+  copyStudentUrlBtn: document.getElementById("copyStudentUrlBtn"),
+  postRoomStatus: document.getElementById("postRoomStatus")
 };
 
 let slides = [];
@@ -1027,7 +1135,6 @@ let lastStickyBoardKey = "";
 let seenIds = new Set();
 let initialNotesLoaded = false;
 let pendingDanmakuIds = new Set();
-let noteCounter = 1;
 
 let drawingMode = false;
 let eraserMode = false;
@@ -1064,34 +1171,46 @@ function init() {
   setupClassify();
   setupDataButtons();
   setupStickyActionEvents();
+  setupRoomEvents();
   resizeCanvas();
-  listenNotes();
 
-  const savedKey = localStorage.getItem("slideFusenGeminiKey") || "";
-  els.geminiKey.value = savedKey;
+  // Gemini APIキーは共用端末に残さない。
+  els.geminiKey.value = "";
   const savedCategories = localStorage.getItem("slideFusenCategories");
   if (savedCategories) els.categoriesInput.value = savedCategories;
+
+  updateRoomUi();
 }
 
 /* ===== QR ===== */
-const QR_DATA_URL = "data:image/png;base64,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";
+async function setupQr() {
+  const url = studentPostUrl();
+  const label = url || "授業を作成すると生徒用URLが表示されます。";
+  if (els.qrUrl) els.qrUrl.textContent = label;
+  if (els.qrModalUrl) els.qrModalUrl.textContent = label;
 
-function setupQr() {
-  if (els.qrUrl) els.qrUrl.textContent = POST_URL;
-  if (els.qrModalUrl) els.qrModalUrl.textContent = POST_URL;
-
-  // CDNのQRライブラリに依存せず、固定URLのQR画像をHTML内に埋め込んで表示します。
-  if (els.qrCanvas) {
-    els.qrCanvas.src = QR_DATA_URL;
+  if (!url || typeof QRCode === "undefined") {
+    if (els.qrCanvas) els.qrCanvas.removeAttribute("src");
+    if (els.qrModalCanvas) els.qrModalCanvas.removeAttribute("src");
+    return;
   }
 
-  if (els.qrModalCanvas) {
-    els.qrModalCanvas.src = QR_DATA_URL;
+  try {
+    const dataUrl = await QRCode.toDataURL(url, { width: 420, margin: 1 });
+    if (els.qrCanvas) els.qrCanvas.src = dataUrl;
+    if (els.qrModalCanvas) els.qrModalCanvas.src = dataUrl;
+  } catch (error) {
+    console.error("QR generation error", error);
   }
 }
 
-function showQrModal() {
-  setupQr();
+async function showQrModal() {
+  const url = studentPostUrl();
+  if (!url) {
+    alert("先に「新しい授業を始める」で授業を作成してください。");
+    return;
+  }
+  await setupQr();
   if (els.qrModal) els.qrModal.classList.add("active");
 }
 
@@ -1216,9 +1335,216 @@ function handleSlideWheelZoom(e) {
   applySlideZoom();
 }
 
+/* ===== 授業ルーム / 匿名認証 ===== */
+const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function generateRoomId(length = 6) {
+  const values = new Uint32Array(length);
+  crypto.getRandomValues(values);
+  return Array.from(values, v => ROOM_ALPHABET[v % ROOM_ALPHABET.length]).join("");
+}
+
+function setRoomInUrl(roomId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", roomId);
+  history.replaceState(null, "", url);
+}
+
+function updateRoomUi() {
+  const hasRoom = Boolean(currentRoomId);
+  if (els.roomCodeLabel) els.roomCodeLabel.textContent = currentRoomId || "未参加";
+  if (els.roleBadge) els.roleBadge.textContent = !hasRoom ? "未参加" : (isTeacher ? "教員モード" : "生徒モード");
+  if (els.createRoomBtn) els.createRoomBtn.disabled = !authReady;
+  if (els.joinRoomBtn) els.joinRoomBtn.disabled = !authReady;
+  if (els.copyStudentUrlBtn) els.copyStudentUrlBtn.hidden = !isTeacher;
+
+  // 教員だけに管理系UIを表示する。
+  ["geminiKey","categoriesInput","classifyBtn","classifyStatus","exportCsvBtn","clearAllBtn"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !isTeacher;
+  });
+
+  const sendBtn = document.getElementById("sendBtn");
+  const postSendBtn = document.getElementById("postSendBtn");
+  if (sendBtn) sendBtn.disabled = !hasRoom;
+  if (postSendBtn) postSendBtn.disabled = !hasRoom;
+
+  if (els.roomNotice) {
+    if (!hasRoom) {
+      els.roomNotice.textContent = "新しい授業を作るか、授業コードで参加してください。";
+    } else if (isTeacher) {
+      els.roomNotice.textContent = "このブラウザが授業の教員です。QRコードを生徒に提示してください。";
+    } else {
+      els.roomNotice.textContent = "この授業に参加しています。投稿・閲覧・いいねができます。";
+    }
+  }
+
+  if (els.postRoomStatus) {
+    els.postRoomStatus.textContent = !hasRoom
+      ? "授業コードがありません。先生のQRコードから開いてください。"
+      : `授業コード ${currentRoomId} に参加しています。`;
+  }
+
+  setupQr();
+  renderStickyBoard(displayedNotes, { force: displayedNotes.length === 0 });
+}
+
+async function loadRoom(roomId) {
+  if (!currentUser) return;
+  const normalized = String(roomId || "").trim().toUpperCase();
+  if (!/^[A-Z2-9]{6}$/.test(normalized)) {
+    if (isPostMode && els.postRoomStatus) {
+      els.postRoomStatus.textContent = "正しい授業コードがありません。先生のQRコードから開いてください。";
+      return;
+    }
+    alert("授業コードは6文字です。");
+    return;
+  }
+
+  const snap = await roomRef(normalized).get();
+  if (!snap.exists) {
+    if (isPostMode && els.postRoomStatus) {
+      els.postRoomStatus.textContent = "指定された授業が見つかりません。";
+      return;
+    }
+    alert("指定された授業が見つかりません。");
+    return;
+  }
+
+  currentRoomId = normalized;
+  isTeacher = snap.data().ownerUid === currentUser.uid;
+  if (els.joinRoomInput) els.joinRoomInput.value = normalized;
+  setRoomInUrl(normalized);
+  updateRoomUi();
+
+  // リスナー状態をルーム切替時に初期化
+  notes = [];
+  displayedNotes = [];
+  seenIds = new Set();
+  pendingDanmakuIds = new Set();
+  stickyNodeSignatures.clear();
+  lastStickyBoardKey = "";
+  initialNotesLoaded = false;
+  listenNotes();
+}
+
+async function createRoom() {
+  if (authSetupError) {
+    alert(authSetupError);
+    return;
+  }
+  if (!authReady || !currentUser) {
+    alert("Firebase匿名認証を準備しています。数秒待ってからもう一度お試しください。");
+    return;
+  }
+
+  els.createRoomBtn.disabled = true;
+  try {
+    let roomId = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const candidate = generateRoomId();
+      const ref = roomRef(candidate);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        await ref.set({
+          ownerUid: currentUser.uid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          app: "slidefusen"
+        });
+        roomId = candidate;
+        break;
+      }
+    }
+    if (!roomId) throw new Error("授業コードを作成できませんでした。");
+    await loadRoom(roomId);
+    alert("授業を作成しました。「スマホ投稿用QR」を生徒に提示してください。");
+  } catch (error) {
+    console.error(error);
+    alert("授業を作成できませんでした。Anonymous AuthenticationとSecurity Rulesを確認してください。");
+  } finally {
+    els.createRoomBtn.disabled = false;
+  }
+}
+
+function setupRoomEvents() {
+  if (els.createRoomBtn) els.createRoomBtn.addEventListener("click", createRoom);
+  if (els.joinRoomBtn) {
+    els.joinRoomBtn.addEventListener("click", () => {
+      loadRoom(els.joinRoomInput.value).catch(error => {
+        console.error(error);
+        alert("授業への参加中にエラーが発生しました。");
+      });
+    });
+  }
+  if (els.joinRoomInput) {
+    els.joinRoomInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        els.joinRoomBtn.click();
+      }
+    });
+  }
+  if (els.copyStudentUrlBtn) {
+    els.copyStudentUrlBtn.addEventListener("click", async () => {
+      const url = studentPostUrl();
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+        alert("生徒用URLをコピーしました。");
+      } catch {
+        prompt("このURLをコピーしてください。", url);
+      }
+    });
+  }
+}
+
+auth.onAuthStateChanged(async user => {
+  if (!user) {
+    try {
+      await auth.signInAnonymously();
+    } catch (error) {
+      console.error(error);
+      authReady = false;
+      currentUser = null;
+      if (error && (error.code === "auth/configuration-not-found" || error.code === "auth/operation-not-allowed")) {
+        authSetupError = "Firebase Console → Authentication → Sign-in method → Anonymous を有効にしてください。";
+      } else {
+        authSetupError = "Firebase Authenticationに接続できませんでした。";
+      }
+      if (els.roleBadge) els.roleBadge.textContent = "Firebase設定が必要";
+      if (els.roomNotice) els.roomNotice.textContent = authSetupError;
+      if (els.postRoomStatus) els.postRoomStatus.textContent = authSetupError;
+      return;
+    }
+    return;
+  }
+
+  authSetupError = null;
+  authReady = true;
+  currentUser = user;
+
+  const roomFromUrl = new URL(window.location.href).searchParams.get("room");
+  if (roomFromUrl) {
+    try {
+      await loadRoom(roomFromUrl);
+    } catch (error) {
+      console.error(error);
+      if (els.postRoomStatus) els.postRoomStatus.textContent = "授業を読み込めませんでした。";
+    }
+  } else {
+    updateRoomUi();
+  }
+});
+
 /* ===== Firebase notes ===== */
 function listenNotes() {
-  db.collection("notes").orderBy("createdAt", "desc")
+  if (unsubscribeNotes) {
+    unsubscribeNotes();
+    unsubscribeNotes = null;
+  }
+  if (!currentRoomId) return;
+
+  unsubscribeNotes = notesCollection().orderBy("createdAt", "desc")
     .onSnapshot(snapshot => {
       const incoming = [];
       snapshot.forEach(doc => {
@@ -1238,12 +1564,6 @@ function listenNotes() {
       });
 
       notes = incoming;
-
-      const maxNum = notes.reduce((max, n) => {
-        const num = parseInt(String(n.id).replace(/\D/g, ""), 10);
-        return isNaN(num) ? max : Math.max(max, num);
-      }, 0);
-      noteCounter = maxNum + 1;
 
       // 初回読み込みでは既存付箋をそのまま表示。
       // 弾幕中のものがあれば renderStickyBoard 側で必ず非表示になります。
@@ -1346,7 +1666,7 @@ function noteHtml(n) {
         <div class="like-meter-fill" style="--like-width:${meterWidth}%"></div>
       </div>
       <span class="like-count">${likes}</span>
-      <button class="note-action-btn delete-note-btn" type="button" title="この付箋を削除" data-action="delete" data-doc-id="${escapeHtml(n.docId)}">🗑</button>
+      ${isTeacher ? `<button class="note-action-btn delete-note-btn" type="button" title="この付箋を削除" data-action="delete" data-doc-id="${escapeHtml(n.docId)}">🗑</button>` : ""}
     </div>
   `;
 }
@@ -1428,8 +1748,13 @@ async function addNote(name, tag, text, statusEl) {
 
   statusEl.textContent = "送信中...";
 
-  const id = `N${String(noteCounter).padStart(3, "0")}`;
-  noteCounter++;
+  if (!currentRoomId) {
+    statusEl.textContent = "授業コードが必要です。";
+    return;
+  }
+
+  const docRef = notesCollection().doc();
+  const id = docRef.id.slice(0, 8).toUpperCase();
 
   const cleanName = name.trim() || " ";
   const cleanTag = tag.trim();
@@ -1437,7 +1762,7 @@ async function addNote(name, tag, text, statusEl) {
   const timecode = currentTimecode();
 
   const localNote = {
-    docId: id,
+    docId: docRef.id,
     id,
     name: cleanName,
     tag: cleanTag,
@@ -1461,7 +1786,7 @@ async function addNote(name, tag, text, statusEl) {
   
 
   try {
-    await db.collection("notes").doc(id).set({
+    await docRef.set({
       id,
       name: cleanName,
       tag: cleanTag,
@@ -1475,7 +1800,7 @@ async function addNote(name, tag, text, statusEl) {
     setTimeout(() => statusEl.textContent = "準備OK", 1400);
   } catch (e) {
     console.error(e);
-    pendingDanmakuIds.delete(id);
+    pendingDanmakuIds.delete(docRef.id);
     statusEl.textContent = "保存中にエラーが発生しました。";
   }
 }
@@ -1538,7 +1863,7 @@ function setupStickyActionEvents() {
 async function likeNote(docId, btn) {
   btn.disabled = true;
   try {
-    await db.collection("notes").doc(docId).update({
+    await notesCollection().doc(docId).update({
       likes: firebase.firestore.FieldValue.increment(1)
     });
   } catch (e) {
@@ -1550,12 +1875,16 @@ async function likeNote(docId, btn) {
 }
 
 async function deleteOneNote(docId, btn) {
+  if (!isTeacher) {
+    alert("削除は授業を作成した教員だけが実行できます。");
+    return;
+  }
   const ok = confirm("この付箋を削除しますか？");
   if (!ok) return;
 
   btn.disabled = true;
   try {
-    await db.collection("notes").doc(docId).delete();
+    await notesCollection().doc(docId).delete();
 
     // ローカル状態からもすぐ除外して、画面反映を早くします。
     notes = notes.filter(n => n.docId !== docId);
@@ -1641,9 +1970,6 @@ function applyViewMode() {
 /* ===== Gemini分類 ===== */
 function setupClassify() {
   document.getElementById("classifyBtn").addEventListener("click", classifyNotesWithGemini);
-  els.geminiKey.addEventListener("change", () => {
-    localStorage.setItem("slideFusenGeminiKey", els.geminiKey.value.trim());
-  });
   els.categoriesInput.addEventListener("change", () => {
     localStorage.setItem("slideFusenCategories", els.categoriesInput.value.trim());
     renderCharts();
@@ -1657,11 +1983,21 @@ function getCategories() {
 }
 
 async function classifyNotesWithGemini() {
+  if (!isTeacher) {
+    els.classifyStatus.textContent = "教員のみ";
+    alert("分類は授業を作成した教員だけが実行できます。");
+    return;
+  }
+
   const apiKey = els.geminiKey.value.trim();
-  localStorage.setItem("slideFusenGeminiKey", apiKey);
 
   if (!apiKey) {
     els.classifyStatus.textContent = "Keyを入力";
+    return;
+  }
+  if (apiKey === firebaseConfig.apiKey) {
+    els.classifyStatus.textContent = "Key確認";
+    alert("Firebase Web APIキーはGemini APIキーとして使用できません。Gemini用の別キーを使用してください。");
     return;
   }
   if (!notes.length) {
@@ -1732,7 +2068,7 @@ ${JSON.stringify(targets, null, 2)}
       const category = normalizeCategory(r.category);
       const note = notes.find(n => n.id === id || n.docId === id);
       if (!note) continue;
-      batch.update(db.collection("notes").doc(note.docId), { category });
+      batch.update(notesCollection().doc(note.docId), { category });
       count++;
     }
 
@@ -2075,6 +2411,10 @@ function csvEscape(value) {
 }
 
 function exportCsv() {
+  if (!isTeacher) {
+    alert("CSV保存は授業を作成した教員だけが実行できます。");
+    return;
+  }
   if (!notes.length) {
     alert("保存する付箋がありません。");
     return;
@@ -2123,6 +2463,10 @@ function exportCsv() {
 }
 
 async function clearAllNotes() {
+  if (!isTeacher) {
+    alert("全消去は授業を作成した教員だけが実行できます。");
+    return;
+  }
   if (!notes.length) {
     alert("消去する付箋がありません。");
     return;
@@ -2136,7 +2480,7 @@ async function clearAllNotes() {
   btn.textContent = "消去中";
 
   try {
-    const snapshot = await db.collection("notes").get();
+    const snapshot = await notesCollection().get();
     const batchSize = 400;
     let batch = db.batch();
     let count = 0;
