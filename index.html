@@ -851,7 +851,11 @@ body.postMode #postOnly {
 #studentSlideViewport {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: clamp(160px, 31vh, 260px);
+  height: clamp(160px, 31dvh, 260px);
+  min-height: 120px;
+  max-height: 62vh;
+  max-height: 62dvh;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -925,6 +929,219 @@ body.postMode #copyright {
   text-shadow: none;
   text-align: center;
   white-space: normal;
+}
+
+
+/* 生徒側：画像と投稿欄の境界ドラッグ */
+#studentSplitHandle {
+  width: 100%;
+  min-height: 34px;
+  margin: -6px 0 8px;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  color: #64748b;
+  cursor: ns-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  outline: none;
+}
+
+#studentSplitHandle::before {
+  content: "";
+  width: 54px;
+  height: 5px;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 0 1px 2px rgba(15,23,42,.16);
+}
+
+#studentSplitHandle span {
+  font-size: 10px;
+  line-height: 1;
+}
+
+#studentSplitHandle:focus-visible {
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(0,166,255,.22);
+}
+
+body.studentResizing {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+/* 投稿 / みんなの付箋 */
+.studentTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 2px 0 14px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #e8eef5;
+}
+
+.postCard .studentTabBtn {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.postCard .studentTabBtn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(15,23,42,.10);
+}
+
+.studentTabCount {
+  display: inline-flex;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  padding: 0 6px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.studentPane[hidden] {
+  display: none !important;
+}
+
+#studentNotesHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0 10px;
+}
+
+#studentNotesHeader h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+#studentNotesCount {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#studentNotesBoard {
+  display: grid;
+  gap: 10px;
+}
+
+.studentNoteCard {
+  position: relative;
+  min-width: 0;
+  padding: 12px 12px 10px;
+  border: 1px solid #dbe4ee;
+  border-radius: 13px;
+  background: #fffdf0;
+  color: #111827;
+  box-shadow: 0 3px 10px rgba(15,23,42,.07);
+}
+
+.studentNoteCard:nth-child(3n+2) {
+  background: #eff6ff;
+}
+
+.studentNoteCard:nth-child(3n) {
+  background: #f0fdf4;
+}
+
+.studentNoteMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.studentNoteAuthor {
+  min-width: 0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studentNoteTag {
+  flex: 0 0 auto;
+  max-width: 46%;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(15,23,42,.08);
+  color: #475569;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studentNoteText {
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studentNoteFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.studentNoteTime {
+  margin-right: auto;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.postCard .studentNoteLike {
+  width: auto;
+  min-width: 62px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid #fecdd3;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.postCard .studentNoteLike:active {
+  transform: scale(.97);
+}
+
+#studentNotesEmpty {
+  padding: 28px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 @media (max-width: 430px) {
@@ -1188,21 +1405,41 @@ body.postMode #copyright {
         </div>
       </div>
 
-      <p>画像を確認しながら、質問・感想・気づいたことを送信できます。画像をタップすると拡大表示できます。</p>
-      <div class="field">
-        <label for="postNameInput">名前（任意）</label>
-        <input id="postNameInput" type="text" placeholder="ニックネーム">
+      <div id="studentSplitHandle" role="separator" aria-orientation="horizontal" aria-label="スライド画像の高さを変更" tabindex="0">
+        <span>上下にドラッグして画像サイズを変更</span>
       </div>
-      <div class="field">
-        <label for="postTagInput">タグ（任意）</label>
-        <input id="postTagInput" type="text" placeholder="#質問 #感想 など">
+
+      <div class="studentTabs" role="tablist" aria-label="生徒画面">
+        <button id="studentPostTabBtn" class="studentTabBtn active" type="button" role="tab" aria-selected="true" aria-controls="studentPostPane">投稿</button>
+        <button id="studentNotesTabBtn" class="studentTabBtn" type="button" role="tab" aria-selected="false" aria-controls="studentNotesPane">みんなの付箋 <span id="studentNotesTabCount" class="studentTabCount">0</span></button>
       </div>
-      <div class="field">
-        <label for="postCommentInput">コメント</label>
-        <textarea id="postCommentInput" placeholder="ここにコメントを書いてください"></textarea>
+
+      <div id="studentPostPane" class="studentPane" role="tabpanel" aria-labelledby="studentPostTabBtn">
+        <p>画像を確認しながら、質問・感想・気づいたことを送信できます。画像をタップすると拡大表示できます。</p>
+        <div class="field">
+          <label for="postNameInput">名前（任意）</label>
+          <input id="postNameInput" type="text" placeholder="ニックネーム">
+        </div>
+        <div class="field">
+          <label for="postTagInput">タグ（任意）</label>
+          <input id="postTagInput" type="text" placeholder="#質問 #感想 など">
+        </div>
+        <div class="field">
+          <label for="postCommentInput">コメント</label>
+          <textarea id="postCommentInput" placeholder="ここにコメントを書いてください"></textarea>
+        </div>
+        <button id="postSendBtn">送信</button>
+        <div id="postOnlyStatus">準備OK</div>
       </div>
-      <button id="postSendBtn">送信</button>
-      <div id="postOnlyStatus">準備OK</div>
+
+      <div id="studentNotesPane" class="studentPane" role="tabpanel" aria-labelledby="studentNotesTabBtn" hidden>
+        <div id="studentNotesHeader">
+          <h2>みんなの付箋</h2>
+          <span id="studentNotesCount">0件・新しい順</span>
+        </div>
+        <div id="studentNotesBoard"></div>
+        <div id="studentNotesEmpty">まだ付箋はありません。</div>
+      </div>
     </div>
   </section>
 </div>
@@ -1294,7 +1531,16 @@ const els = {
   postRoomStatus: document.getElementById("postRoomStatus"),
   studentSlideImage: document.getElementById("studentSlideImage"),
   studentSlideEmpty: document.getElementById("studentSlideEmpty"),
-  studentSlideCounter: document.getElementById("studentSlideCounter")
+  studentSlideCounter: document.getElementById("studentSlideCounter"),
+  studentSplitHandle: document.getElementById("studentSplitHandle"),
+  studentPostTabBtn: document.getElementById("studentPostTabBtn"),
+  studentNotesTabBtn: document.getElementById("studentNotesTabBtn"),
+  studentPostPane: document.getElementById("studentPostPane"),
+  studentNotesPane: document.getElementById("studentNotesPane"),
+  studentNotesBoard: document.getElementById("studentNotesBoard"),
+  studentNotesEmpty: document.getElementById("studentNotesEmpty"),
+  studentNotesCount: document.getElementById("studentNotesCount"),
+  studentNotesTabCount: document.getElementById("studentNotesTabCount")
 };
 
 let slides = [];
@@ -1347,6 +1593,7 @@ function init() {
   setupStickyActionEvents();
   setupRoomEvents();
   setupStudentSlidePreview();
+  setupStudentMobileUi();
   resizeCanvas();
 
   // Gemini APIキーは共用端末に残さない。
@@ -1633,6 +1880,233 @@ function setupStudentSlidePreview() {
   });
 }
 
+function setupStudentMobileUi() {
+  if (!isPostMode) return;
+
+  setupStudentTabs();
+  setupStudentSplitResize();
+  setupStudentNotesActions();
+
+  const savedHeight = Number(localStorage.getItem("slideFusenStudentSlideHeight"));
+  if (Number.isFinite(savedHeight) && savedHeight > 0) {
+    setStudentSlideHeight(savedHeight, false);
+  }
+
+  renderStudentNotes(notes);
+}
+
+function setupStudentTabs() {
+  if (!els.studentPostTabBtn || !els.studentNotesTabBtn) return;
+
+  const activate = tab => {
+    const showNotes = tab === "notes";
+    els.studentPostTabBtn.classList.toggle("active", !showNotes);
+    els.studentNotesTabBtn.classList.toggle("active", showNotes);
+    els.studentPostTabBtn.setAttribute("aria-selected", String(!showNotes));
+    els.studentNotesTabBtn.setAttribute("aria-selected", String(showNotes));
+    if (els.studentPostPane) els.studentPostPane.hidden = showNotes;
+    if (els.studentNotesPane) els.studentNotesPane.hidden = !showNotes;
+
+    if (showNotes) {
+      renderStudentNotes(notes);
+    }
+  };
+
+  els.studentPostTabBtn.addEventListener("click", () => activate("post"));
+  els.studentNotesTabBtn.addEventListener("click", () => activate("notes"));
+}
+
+function studentSlideHeightBounds() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight || 700;
+  return {
+    min: 120,
+    max: Math.max(180, Math.min(520, viewportHeight * 0.62))
+  };
+}
+
+function setStudentSlideHeight(height, save = true) {
+  const viewport = document.getElementById("studentSlideViewport");
+  if (!viewport) return;
+
+  const bounds = studentSlideHeightBounds();
+  const next = Math.round(Math.max(bounds.min, Math.min(bounds.max, height)));
+  viewport.style.height = next + "px";
+  viewport.style.aspectRatio = "auto";
+
+  if (save) {
+    localStorage.setItem("slideFusenStudentSlideHeight", String(next));
+  }
+}
+
+function setupStudentSplitResize() {
+  const handle = els.studentSplitHandle;
+  const viewport = document.getElementById("studentSlideViewport");
+  if (!handle || !viewport) return;
+
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  const start = (clientY, pointerId) => {
+    dragging = true;
+    startY = clientY;
+    startHeight = viewport.getBoundingClientRect().height;
+    document.body.classList.add("studentResizing");
+    if (pointerId != null && handle.setPointerCapture) {
+      try { handle.setPointerCapture(pointerId); } catch {}
+    }
+  };
+
+  const move = clientY => {
+    if (!dragging) return;
+    setStudentSlideHeight(startHeight + (clientY - startY));
+  };
+
+  const end = pointerId => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove("studentResizing");
+    if (pointerId != null && handle.releasePointerCapture) {
+      try { handle.releasePointerCapture(pointerId); } catch {}
+    }
+  };
+
+  if (window.PointerEvent) {
+    handle.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      start(e.clientY, e.pointerId);
+    });
+    handle.addEventListener("pointermove", e => {
+      if (!dragging) return;
+      e.preventDefault();
+      move(e.clientY);
+    });
+    handle.addEventListener("pointerup", e => end(e.pointerId));
+    handle.addEventListener("pointercancel", e => end(e.pointerId));
+  } else {
+    handle.addEventListener("touchstart", e => {
+      if (!e.touches[0]) return;
+      e.preventDefault();
+      start(e.touches[0].clientY, null);
+    }, { passive: false });
+    handle.addEventListener("touchmove", e => {
+      if (!dragging || !e.touches[0]) return;
+      e.preventDefault();
+      move(e.touches[0].clientY);
+    }, { passive: false });
+    handle.addEventListener("touchend", () => end(null));
+  }
+
+  handle.addEventListener("keydown", e => {
+    const current = viewport.getBoundingClientRect().height;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setStudentSlideHeight(current - 20);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setStudentSlideHeight(current + 20);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setStudentSlideHeight(studentSlideHeightBounds().min);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setStudentSlideHeight(studentSlideHeightBounds().max);
+    }
+  });
+
+  window.visualViewport?.addEventListener("resize", () => {
+    const current = viewport.getBoundingClientRect().height;
+    setStudentSlideHeight(current, false);
+  });
+}
+
+function studentNoteHtml(n) {
+  const likes = Number(n.likes || 0);
+  const label = n.category || n.tag || "未分類";
+  const author = (n.name || "").trim() || "匿名";
+  const time = n.createdAt
+    ? n.createdAt.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  return `
+    <div class="studentNoteMeta">
+      <span class="studentNoteAuthor">${escapeHtml(author)}</span>
+      <span class="studentNoteTag">${escapeHtml(label)}</span>
+    </div>
+    <div class="studentNoteText">${escapeHtml(n.text)}</div>
+    <div class="studentNoteFooter">
+      <span class="studentNoteTime">${escapeHtml(time)}</span>
+      <button class="studentNoteLike" type="button" data-action="like" data-doc-id="${escapeHtml(n.docId)}" aria-label="いいね">
+        ♥ <span>${likes}</span>
+      </button>
+    </div>
+  `;
+}
+
+function renderStudentNotes(list) {
+  if (!isPostMode || !els.studentNotesBoard) return;
+
+  const latestFirst = (list || []).slice().sort((a, b) => {
+    const at = a.createdAt ? a.createdAt.getTime() : 0;
+    const bt = b.createdAt ? b.createdAt.getTime() : 0;
+    return bt - at;
+  });
+
+  if (els.studentNotesCount) {
+    els.studentNotesCount.textContent = `${latestFirst.length}件・新しい順`;
+  }
+  if (els.studentNotesTabCount) {
+    els.studentNotesTabCount.textContent = String(latestFirst.length);
+  }
+  if (els.studentNotesEmpty) {
+    els.studentNotesEmpty.hidden = latestFirst.length > 0;
+  }
+
+  const existing = new Map(
+    Array.from(els.studentNotesBoard.children).map(node => [node.dataset.docId, node])
+  );
+  const wanted = new Set(latestFirst.map(n => n.docId));
+
+  existing.forEach((node, id) => {
+    if (!wanted.has(id)) node.remove();
+  });
+
+  latestFirst.forEach((n, index) => {
+    const signature = noteDomSignature(n);
+    let node = els.studentNotesBoard.querySelector(`[data-doc-id="${CSS.escape(n.docId)}"]`);
+
+    if (!node) {
+      node = document.createElement("article");
+      node.className = "studentNoteCard";
+      node.dataset.docId = n.docId;
+      node.dataset.signature = signature;
+      node.innerHTML = studentNoteHtml(n);
+    } else if (node.dataset.signature !== signature) {
+      node.dataset.signature = signature;
+      node.innerHTML = studentNoteHtml(n);
+    }
+
+    const currentAtIndex = els.studentNotesBoard.children[index];
+    if (currentAtIndex !== node) {
+      els.studentNotesBoard.insertBefore(node, currentAtIndex || null);
+    }
+  });
+}
+
+function setupStudentNotesActions() {
+  if (!els.studentNotesBoard) return;
+
+  els.studentNotesBoard.addEventListener("click", async e => {
+    const btn = e.target.closest("[data-action='like']");
+    if (!btn) return;
+
+    e.preventDefault();
+    const docId = btn.dataset.docId;
+    if (!docId) return;
+    await likeNote(docId, btn);
+  });
+}
+
 function listenRoomState() {
   if (unsubscribeRoom) {
     unsubscribeRoom();
@@ -1798,6 +2272,7 @@ function updateRoomUi() {
 
   setupQr();
   renderStickyBoard(displayedNotes, { force: displayedNotes.length === 0 });
+  renderStudentNotes(notes);
 }
 
 async function loadRoom(roomId) {
@@ -1986,6 +2461,7 @@ function listenNotes() {
       });
 
       notes = incoming;
+      renderStudentNotes(incoming);
 
       // 初回読み込みでは既存付箋をそのまま表示。
       // 弾幕中のものがあれば renderStickyBoard 側で必ず非表示になります。
@@ -2049,6 +2525,7 @@ function queueDanmakuThenSticky(note) {
     }
 
     renderStickyBoard(displayedNotes);
+    renderStudentNotes(notes);
     renderCharts();
   });
 }
