@@ -1776,7 +1776,7 @@ async function addNote(name, tag, text, statusEl) {
   // 発表者画面の左フォームから投稿した場合は、
   // Firestore反映を待たず、その瞬間に「弾幕 → 付箋」の順番を予約する。
   if (!isPostMode) {
-    seenIds.add(id);
+    seenIds.add(docRef.id);
     queueDanmakuThenSticky(localNote);
     // 送信直後は右側ボードを一切触らない。
     // 弾幕終了後に queueDanmakuThenSticky() から追加されます。
